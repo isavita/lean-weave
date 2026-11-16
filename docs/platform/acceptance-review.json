@@ -1,0 +1,675 @@
+{
+  "reviewed_at_utc": "2026-11-16T15:36:17.620017+00:00",
+  "reviewed_head": "3e8288f90b3389b35759ee9df9d7d370b849c90b",
+  "working_tree_was_dirty": true,
+  "registry_sha256_at_review": "ddd1d83884addcb89da72716c0d0a581c650223ac9f1a0e793b85768ea108250",
+  "scope": "Independent requirement audit of all27 original checklist items. Registry and unrelated source were not edited by this review. Authorized P01 and native HEAD fixes are separately committed. This file is not an all27-complete or crossplatform certification.",
+  "blocking_publication_gates": [
+    "Regenerate final source-bound platform/external/HTTP/GraphQL evidence after final dcce824 dependency repin and current final library edits.",
+    "Obtain green framework native Linux/macOS/Windows, real-service Linux and real-browser CI runs; configured jobs alone are not executed evidence.",
+    "GraphQL owner final signoff/current pinned client rerun remains pending at review time.",
+    "Publish API docs from the final integrated revision; existing public0.1 API publication does not establish new0.2 pages."
+  ],
+  "findings": [
+    {
+      "id": "A01",
+      "finding": "Channel.broadcast was local-only even when callers configured Redis",
+      "status": "closed_with_native_evidence",
+      "resolution": "ac4654e + a77dd61 unify Publisher/Publication and prove actual Channel.broadcast across real Redis into WS and SSE; 3tests passed."
+    },
+    {
+      "id": "A02",
+      "finding": "Tenant flag override updates/removals bypassed feature mutation audit",
+      "status": "closed_in_source_pending_final_refresh",
+      "resolution": "39c1e43 adds atomic actor/time/full snapshot audit with count/byte failure checks in Tenant.Config and ConfigTest."
+    },
+    {
+      "id": "A03",
+      "finding": "CSP nonce-bearing public responses/fragments could be cached/reused or mismatch fresh headers",
+      "status": "closed_in_source_pending_final_refresh",
+      "resolution": "39c1e43 core cache request/response eligibility and both-order/fragment/report-only regressions close both pipeline orders."
+    },
+    {
+      "id": "A04",
+      "finding": "Router generated identifiers silently captured caller section variables",
+      "status": "closed_in_source_pending_final_refresh",
+      "resolution": "Direct temporary-module compiler reproducer observed audited:Router instead of Nat→Router. Fresh names plus MacroHygiene cover sections/context/reverse/API binders. Similar OpenApi own-prefix and query-name failures were not reproduced and are not asserted."
+    },
+    {
+      "id": "A05",
+      "finding": "Realtime wire/browser checks were absent from the new platform CI",
+      "status": "ci_steps_added_execution_pending",
+      "resolution": "Native workflow now runs realtime wire; dedicated Chromium/WebKit job runs Live/CSP and official gRPC-Web clients. Upload Redis pubsub-presence-result.json as well so service evidence is retained."
+    },
+    {
+      "id": "A06",
+      "finding": "Live mount invalidated another tab using the same browser cookie",
+      "status": "closed_with_multiview_browser_evidence",
+      "resolution": "bd64b5a binds independent view IDs to a stable owner cookie with per-owner capacity and ownership/revocation checks; current WebKit report hashes match."
+    },
+    {
+      "id": "A07",
+      "finding": "Unknown-length streamed HEAD advertised Content-Length:0 despite nonempty GET",
+      "status": "closed_native_local_proof_final_tls_matrix_pending",
+      "resolution": "lean-net dcce82480a6985b3269a474b12b81863e6bdb115 omits unknown length metadata, preserves known11/bodyless statuses and closes producer once; all15stream + encoder/connection + focused headers passed."
+    },
+    {
+      "id": "A08",
+      "finding": "Global flag/config and file shutdown scope needed precise limits",
+      "status": "documented_scope",
+      "resolution": "Flags apply across one process-shared Store, with crossnode propagation explicit. A blocked OS file write/flush cannot be hard-preempted; normal cooperative native SIGTERM bounds are tested, not universal hard realtime exit under a stalled kernel."
+    }
+  ],
+  "evidence_freshness": [
+    {
+      "path": "docs/platform/jobs-result.json",
+      "source_hashes_checked": 15,
+      "stale_or_missing": []
+    },
+    {
+      "path": "docs/platform/plugins-result.json",
+      "source_hashes_checked": 8,
+      "stale_or_missing": []
+    },
+    {
+      "path": "docs/platform/platform-result.json",
+      "source_hashes_checked": 30,
+      "stale_or_missing": [
+        "LeanWeave/Cache/Response.lean",
+        "LeanWeave/Observability/Trace.lean",
+        "LeanWeave/Operations/Health.lean",
+        "LeanWeave/Tenant/Config.lean",
+        "LeanWeave/Test/PlatformMain.lean",
+        "LeanWeave/Test/PlatformOperations.lean",
+        "LeanWeave/Test/PlatformSecurity.lean",
+        "adapters/http/LeanWeaveHttp/Client.lean",
+        "adapters/http/LeanWeaveHttp/Native.lean",
+        "adapters/http/LeanWeaveHttp/Otlp.lean",
+        "adapters/http/LeanWeaveHttp/Vault.lean",
+        "adapters/http/c/http.c",
+        "adapters/postgres/LeanWeavePostgres/Pool.lean"
+      ]
+    },
+    {
+      "path": "test/evidence/realtime-browser.json",
+      "source_hashes_checked": 5,
+      "stale_or_missing": []
+    },
+    {
+      "path": "test/evidence/graphql-clients.json",
+      "source_hashes_checked": 18,
+      "stale_or_missing": []
+    },
+    {
+      "path": "adapters/http/test/wire-result.json",
+      "source_hashes_checked": 4,
+      "stale_or_missing": [
+        "LeanWeaveHttp/Client.lean"
+      ]
+    },
+    {
+      "path": "adapters/redis/test/pubsub-presence-result.json",
+      "source_hashes_checked": 6,
+      "stale_or_missing": []
+    }
+  ],
+  "native_dependency_ci": {
+    "previous_pin": "db114456cf8ad27efb68d967e296e1d2b5efaaf9",
+    "previous_tls_run": 43887267877,
+    "previous_result": "Ubuntu passed; Windows failed a fixed35ms tick-count assumption; macOS never acquired a hosted arm64 runner (explicit capacity annotation), not a code failure.",
+    "timer_fix": "a20e55846414880b25f562252bb6313439e560f7",
+    "timer_fix_tls_run": 43895154756,
+    "timer_fix_result_at_last_poll": "Ubuntu/macOS passed; Windows progressed past previous failure to final static/observability steps.",
+    "final_pin": "dcce82480a6985b3269a474b12b81863e6bdb115",
+    "final_tls_run": 43897188644,
+    "final_tls_result": "in_progress; must be tracked separately, not inferred from a20."
+  },
+  "items": [
+    {
+      "id": "P01",
+      "feature": "Channel & PubSub Abstraction",
+      "requirement": "A subscription model layered over WebSockets and SSE. Implement local and distributed adapters (e.g., Redis or Erlang-style PG2) for broadcasting messages across nodes.",
+      "assessment": "local_native_supported",
+      "implementation": [
+        "LeanWeave/Realtime/PubSub.lean",
+        "LeanWeave/Realtime/Channel.lean",
+        "adapters/redis/LeanWeaveRedis/PubSub.lean"
+      ],
+      "recorded_evidence": [
+        "adapters/redis/test/pubsub-presence-result.json"
+      ],
+      "checks": [
+        "weave-stream-test",
+        "adapters/redis/test/test_pubsub_presence.py"
+      ],
+      "scope_and_limits": "Common typed Channel.broadcast now selects local or Redis Publisher. Real two-process WS and SSE delivery is observed; Publication is queue admission, never a remote delivery acknowledgement. Redis transport is ephemeral/at-most-once and deployment namespace/auth boundaries remain explicit.",
+      "platforms": "Local evidence identifies macOS arm64; configured platform CI is not proof until its immutable run passes. Real-service platform jobs are Linux; Windows wire/native checks do not imply real PostgreSQL/Redis service execution."
+    },
+    {
+      "id": "P02",
+      "feature": "Presence Tracking",
+      "requirement": "A CRDT-backed (Conflict-free Replicated Data Type) mechanism to track which users are online or connected to a given topic across a cluster, updating in real-time as users join or disconnect.",
+      "assessment": "local_native_supported",
+      "implementation": [
+        "LeanWeave/Presence.lean"
+      ],
+      "recorded_evidence": [
+        "adapters/redis/test/pubsub-presence-result.json"
+      ],
+      "checks": [
+        "weave-stream-test",
+        "adapters/redis/test/test_pubsub_presence.py"
+      ],
+      "scope_and_limits": "Dotted observed-remove state and periodic anti-entropy, per-connection membership, partition expiry/rejoin and stale-leave non-resurrection are exercised. Actor IDs must be incarnation-unique; causal history is finite and rejects overflow rather than forgetting tombstones.",
+      "platforms": "Local evidence identifies macOS arm64; configured platform CI is not proof until its immutable run passes. Real-service platform jobs are Linux; Windows wire/native checks do not imply real PostgreSQL/Redis service execution."
+    },
+    {
+      "id": "P03",
+      "feature": "LiveView-style Interactive Components",
+      "requirement": "Server-rendered, stateful components that send HTML diffs over WebSockets (or SSE with fallback), eliminating the need for heavy frontend state management.",
+      "assessment": "local_browser_supported_final_pin_refresh_pending",
+      "implementation": [
+        "LeanWeave/Live.lean",
+        "LeanWeave/Live/Client.lean"
+      ],
+      "recorded_evidence": [
+        "test/evidence/realtime-browser.json"
+      ],
+      "checks": [
+        "test/test_realtime.py",
+        "test/browser_realtime.py",
+        "test/browser_realtime.cjs"
+      ],
+      "scope_and_limits": "Typed server state and keyed HTML patches are real. Multi-view owner cookie now isolates tabs and mixed WS/SSE connections. State remains on one reactor owner; this is not transparent cross-worker/node state migration. Browser report source hashes currently match.",
+      "platforms": "Local evidence identifies macOS arm64; configured platform CI is not proof until its immutable run passes. Real-service platform jobs are Linux; Windows wire/native checks do not imply real PostgreSQL/Redis service execution."
+    },
+    {
+      "id": "P04",
+      "feature": "Streaming & Multipart Responses",
+      "requirement": "Native support for `Transfer-Encoding: chunked` (already in lean-net) exposed via an async generator/stream API for LLM token streaming or large file exports.",
+      "assessment": "native_contracts_present_final_matrix_pending",
+      "implementation": [
+        "LeanWeave/Core/Stream.lean",
+        "LeanWeave/Stream.lean",
+        "LeanWeave/Core/Server.lean"
+      ],
+      "recorded_evidence": [],
+      "checks": [
+        "weave-stream-test",
+        "test/test_realtime.py",
+        "lean-net:test/test_application_streams.py"
+      ],
+      "scope_and_limits": "Owned cooperative polls, exact output credit and multipart producers are implemented. Native latest fix preserves unknown HEAD length omission, known length and bodyless statuses; all15 stream wires passed locally. The final pinned TLS matrix remains a separate acceptance gate.",
+      "platforms": "Local evidence identifies macOS arm64; configured platform CI is not proof until its immutable run passes. Real-service platform jobs are Linux; Windows wire/native checks do not imply real PostgreSQL/Redis service execution."
+    },
+    {
+      "id": "P05",
+      "feature": "Job Queues & Workers",
+      "requirement": "A native job system (sync, in-memory, or DB-backed) with typed payloads, retries with exponential backoff, and dead-letter queues.",
+      "assessment": "local_native_supported",
+      "implementation": [
+        "LeanWeave/Jobs/Types.lean",
+        "LeanWeave/Jobs/Local.lean",
+        "LeanWeave/Jobs/Worker.lean",
+        "adapters/postgres/LeanWeavePostgres/Jobs.lean"
+      ],
+      "recorded_evidence": [
+        "docs/platform/jobs-result.json"
+      ],
+      "checks": [
+        "weave-jobs-test",
+        "adapters/postgres/test/jobs_cluster.py"
+      ],
+      "scope_and_limits": "Sync, bounded dedicated workers, typed payloads, retries/backoff/dead letters, fencing and real multiprocess crash recovery exist. At-least-once effects require idempotency or application DB transactions. Local memory queue durability is not claimed.",
+      "platforms": "Local evidence identifies macOS arm64; configured platform CI is not proof until its immutable run passes. Real-service platform jobs are Linux; Windows wire/native checks do not imply real PostgreSQL/Redis service execution."
+    },
+    {
+      "id": "P06",
+      "feature": "Cron Scheduling",
+      "requirement": "A declarative DSL for scheduling periodic tasks (e.g., `@cron \"0 * * * *\"`) that hooks into the reactor's timer wheel.",
+      "assessment": "local_native_supported",
+      "implementation": [
+        "LeanWeave/Jobs/Cron.lean",
+        "LeanWeave/Jobs/Lifecycle.lean"
+      ],
+      "recorded_evidence": [
+        "docs/platform/jobs-result.json"
+      ],
+      "checks": [
+        "LeanWeave/Jobs/CronTest.lean",
+        "adapters/postgres/test/JobsMain.lean lifecycle"
+      ],
+      "scope_and_limits": "cron! is elaboration-checked, UTC, bounded catch-up/backpressure. Scheduler.application hooks into native onTick maintenance and real timer dispatch is tested. It uses a native timer pulse with nextDue, not a separate unbounded timer task per schedule.",
+      "platforms": "Local evidence identifies macOS arm64; configured platform CI is not proof until its immutable run passes. Real-service platform jobs are Linux; Windows wire/native checks do not imply real PostgreSQL/Redis service execution."
+    },
+    {
+      "id": "P07",
+      "feature": "Workflow Engine",
+      "requirement": "State machines for multi-step background processes (e.g., payment processing, user onboarding), with compensation logic for failures.",
+      "assessment": "local_native_supported",
+      "implementation": [
+        "LeanWeave/Workflow/Types.lean",
+        "LeanWeave/Workflow/Local.lean",
+        "adapters/postgres/LeanWeavePostgres/Workflows.lean"
+      ],
+      "recorded_evidence": [
+        "docs/platform/jobs-result.json"
+      ],
+      "checks": [
+        "LeanWeave/Workflow/Test.lean",
+        "adapters/postgres/test/jobs_cluster.py"
+      ],
+      "scope_and_limits": "Bounded validated DAG, persistent state transitions, reverse-topological saga compensation, cancellation and explicit failed-compensation retry exist. Whole-DAG capacity reservations prevent later steps/compensations from deadlocking behind full admission.",
+      "platforms": "Local evidence identifies macOS arm64; configured platform CI is not proof until its immutable run passes. Real-service platform jobs are Linux; Windows wire/native checks do not imply real PostgreSQL/Redis service execution."
+    },
+    {
+      "id": "P08",
+      "feature": "Transactional Outbox",
+      "requirement": "A pattern to ensure database writes and job publishing happen atomically, preventing dual-write anomalies.",
+      "assessment": "local_native_supported",
+      "implementation": [
+        "adapters/postgres/LeanWeavePostgres/Jobs.lean",
+        "adapters/postgres/LeanWeavePostgres/Workflows.lean"
+      ],
+      "recorded_evidence": [
+        "docs/platform/jobs-result.json"
+      ],
+      "checks": [
+        "adapters/postgres/test/jobs_cluster.py"
+      ],
+      "scope_and_limits": "Actual business write plus enqueueOn share one transaction; rollback/commit tested. A terminal-job trigger records transition events in the ACK transaction; a process killed after ACK recovers dependent publishing from the durable outbox.",
+      "platforms": "Local evidence identifies macOS arm64; configured platform CI is not proof until its immutable run passes. Real-service platform jobs are Linux; Windows wire/native checks do not imply real PostgreSQL/Redis service execution."
+    },
+    {
+      "id": "P09",
+      "feature": "Tenant Resolution Middleware",
+      "requirement": "Extract the tenant from subdomain, path, JWT claim, or header, and thread it through the `Context` transparently.",
+      "assessment": "implemented_local_evidence_refresh_pending",
+      "implementation": [
+        "LeanWeave/Tenant/Basic.lean",
+        "LeanWeave/Tenant/Jwt.lean",
+        "LeanWeave/Security/Jwt.lean"
+      ],
+      "recorded_evidence": [
+        "docs/platform/platform-result.json"
+      ],
+      "checks": [
+        "LeanWeave/Test/PlatformSecurity.lean",
+        "scripts/test_platform_compile.py"
+      ],
+      "scope_and_limits": "Header/path/subdomain/verified JWT sources feed Context; agreement and explicit authorization are required. JWT profile is HS256 with issuer/audience/expiry checks, not arbitrary unverified claim extraction.",
+      "platforms": "Local evidence identifies macOS arm64; configured platform CI is not proof until its immutable run passes. Real-service platform jobs are Linux; Windows wire/native checks do not imply real PostgreSQL/Redis service execution."
+    },
+    {
+      "id": "P10",
+      "feature": "Row-Level Security (RLS) Hooks",
+      "requirement": "Automatic injection of `tenant_id` into SQL queries or a proof-based guarantee that a request cannot query data outside its tenant.",
+      "assessment": "local_database_supported_final_refresh_pending",
+      "implementation": [
+        "LeanWeave/Tenant/Sql.lean",
+        "adapters/postgres/LeanWeavePostgres/Tenant.lean",
+        "adapters/postgres/LeanWeavePostgres/Pool.lean"
+      ],
+      "recorded_evidence": [
+        "adapters/postgres/test/tenant-result.json"
+      ],
+      "checks": [
+        "adapters/postgres/test/tenant_compile.py",
+        "adapters/postgres/test/tenant_cluster.py"
+      ],
+      "scope_and_limits": "Private tenant-indexed commands inject predicates/insert columns. Scoped transactions use SET LOCAL plus real restrictive FORCE RLS under a non-superuser without BYPASSRLS. Escape/reborrow and same-physical-connection reset are tested. General raw Pool.query remains an explicitly trusted lower-level API.",
+      "platforms": "Local evidence identifies macOS arm64; configured platform CI is not proof until its immutable run passes. Real-service platform jobs are Linux; Windows wire/native checks do not imply real PostgreSQL/Redis service execution."
+    },
+    {
+      "id": "P11",
+      "feature": "Per-Tenant Configuration",
+      "requirement": "Override feature flags, rate limits, cache rules, and branding dynamically per tenant without code changes.",
+      "assessment": "implemented_local_evidence_refresh_pending",
+      "implementation": [
+        "LeanWeave/Tenant/Config.lean",
+        "LeanWeave/Tenant/Brand.lean",
+        "LeanWeave/Cache/Response.lean",
+        "adapters/redis/LeanWeaveRedis/Cache.lean"
+      ],
+      "recorded_evidence": [
+        "docs/platform/platform-result.json"
+      ],
+      "checks": [
+        "LeanWeave/Test/PlatformSecurity.lean",
+        "LeanWeave/Test/PlatformOperations.lean",
+        "LeanWeave/Tenant/ConfigTest.lean"
+      ],
+      "scope_and_limits": "Runtime snapshots drive flags/rates/cache/branding without rebuilding pipelines. Revision watermark and canonical fingerprint now prevent remove/recreate and restart stale reuse. Store is process-shared; distributed configuration propagation is not implicit.",
+      "platforms": "Local evidence identifies macOS arm64; configured platform CI is not proof until its immutable run passes. Real-service platform jobs are Linux; Windows wire/native checks do not imply real PostgreSQL/Redis service execution."
+    },
+    {
+      "id": "P12",
+      "feature": "Deterministic Percentage Rollouts",
+      "requirement": "Sticky bucketing based on user ID or session ID, ensuring a user sees the same variant across requests.",
+      "assessment": "implemented_local_evidence_refresh_pending",
+      "implementation": [
+        "LeanWeave/Feature/Basic.lean"
+      ],
+      "recorded_evidence": [
+        "docs/platform/platform-result.json"
+      ],
+      "checks": [
+        "LeanWeave/Test/PlatformSecurity.lean"
+      ],
+      "scope_and_limits": "SHA256 length-delimited bucketing uses authenticated principal, verified session/subject or an explicitly documented anonymous tenant cohort. It is deterministic and sticky, not a claim that anonymous identity exists without a session.",
+      "platforms": "Local evidence identifies macOS arm64; configured platform CI is not proof until its immutable run passes. Real-service platform jobs are Linux; Windows wire/native checks do not imply real PostgreSQL/Redis service execution."
+    },
+    {
+      "id": "P13",
+      "feature": "Kill Switches",
+      "requirement": "Per-flag global overrides to disable features instantly in production.",
+      "assessment": "implemented_documented_process_scope",
+      "implementation": [
+        "LeanWeave/Feature/Basic.lean"
+      ],
+      "recorded_evidence": [
+        "docs/platform/platform-result.json"
+      ],
+      "checks": [
+        "LeanWeave/Test/PlatformSecurity.lean",
+        "LeanWeave/Test/PlatformOperations.lean"
+      ],
+      "scope_and_limits": "Global disable takes precedence over tenant/audience overrides for all consumers sharing the process Store and affects subsequent requests. No deployment-wide instantaneous cross-node configuration delivery is claimed.",
+      "platforms": "Local evidence identifies macOS arm64; configured platform CI is not proof until its immutable run passes. Real-service platform jobs are Linux; Windows wire/native checks do not imply real PostgreSQL/Redis service execution."
+    },
+    {
+      "id": "P14",
+      "feature": "Audit Trails",
+      "requirement": "Log every flag mutation (who changed what, when) for compliance and debugging.",
+      "assessment": "closed_in_source_final_execution_refresh_pending",
+      "implementation": [
+        "LeanWeave/Feature/Basic.lean",
+        "LeanWeave/Tenant/Config.lean"
+      ],
+      "recorded_evidence": [
+        "docs/platform/platform-result.json"
+      ],
+      "checks": [
+        "LeanWeave/Tenant/ConfigTest.lean",
+        "LeanWeave/Test/PlatformOperations.lean"
+      ],
+      "scope_and_limits": "Feature definitions and tenant configuration set/remove now atomically append actor/time/full before-and-after snapshots. Full count/byte ledgers fail closed. Acknowledgement requires external persistence; this closes the previously unaudited tenant flag override mutation path.",
+      "platforms": "Local evidence identifies macOS arm64; configured platform CI is not proof until its immutable run passes. Real-service platform jobs are Linux; Windows wire/native checks do not imply real PostgreSQL/Redis service execution."
+    },
+    {
+      "id": "P15",
+      "feature": "GraphQL Subscriptions",
+      "requirement": "WebSocket-based GraphQL execution with real-time subscription support, potentially reusing the Channel/PubSub layer.",
+      "assessment": "runtime_and_official_clients_present_final_signoff_pending",
+      "implementation": [
+        "LeanWeave/GraphQL/Schema.lean",
+        "LeanWeave/GraphQL/Execution.lean",
+        "LeanWeave/GraphQL/HTTP.lean",
+        "LeanWeave/GraphQL/WebSocket.lean"
+      ],
+      "recorded_evidence": [
+        "test/evidence/graphql-clients.json"
+      ],
+      "checks": [
+        "weave-graphql-test",
+        "test/test_graphql.py",
+        "test/graphql-client/acceptance.mjs"
+      ],
+      "scope_and_limits": "Actual typed execution and graphql-transport-ws subscriptions now exist; official GraphQL.js/ graphql-ws client report is present. Assigned owner is still finalizing runtime/client tests and dependency pin. This bounded closed-value profile does not implement unions/interfaces/federation/full GraphQL conformance; those limits are explicit in its README.",
+      "platforms": "Local evidence identifies macOS arm64; configured platform CI is not proof until its immutable run passes. Real-service platform jobs are Linux; Windows wire/native checks do not imply real PostgreSQL/Redis service execution."
+    },
+    {
+      "id": "P16",
+      "feature": "gRPC & gRPC-Web",
+      "requirement": "Native support for Protobuf schema parsing, unary and streaming RPCs, and gRPC-Web on plain HTTP/1.1+.",
+      "assessment": "local_official_interop_supported_final_ci_pending",
+      "implementation": [
+        "LeanWeave/Protobuf/Descriptor.lean",
+        "LeanWeave/Protobuf/Compiler.lean",
+        "LeanWeave/Protobuf/Wire.lean",
+        "LeanWeave/Grpc/Service.lean"
+      ],
+      "recorded_evidence": [
+        "docs/platform/evidence/protocols-compile.json",
+        "docs/platform/evidence/protocols-wire.json",
+        "docs/platform/evidence/grpc-web-browser.json"
+      ],
+      "checks": [
+        "scripts/test_protocol_compile.py",
+        "scripts/test_protocols.py",
+        "scripts/test_grpc_web_browser.py"
+      ],
+      "scope_and_limits": "Native proto3 parsing/codecs plus all4 RPC shapes are exercised by official grpcio/protobuf and a real grpc-web browser client. Documented profile: self-contained descriptors; imported type resolution/proto2/editions and compressed messages are not claimed. Browser gRPC-Web supports protocol-appropriate unary/server streaming.",
+      "platforms": "Local evidence identifies macOS arm64; configured platform CI is not proof until its immutable run passes. Real-service platform jobs are Linux; Windows wire/native checks do not imply real PostgreSQL/Redis service execution."
+    },
+    {
+      "id": "P17",
+      "feature": "SSE (Server-Sent Events)",
+      "requirement": "A first-class `SSE` response type with keep-alive, automatic reconnect handling, and event ID tracking.",
+      "assessment": "local_native_and_browser_supported_final_ci_pending",
+      "implementation": [
+        "LeanWeave/SSE.lean",
+        "LeanWeave/Live/Client.lean"
+      ],
+      "recorded_evidence": [
+        "test/evidence/realtime-browser.json"
+      ],
+      "checks": [
+        "weave-stream-test",
+        "test/test_realtime.py"
+      ],
+      "scope_and_limits": "First-class SSE body, safe event fields, retry hints, keepalive, IDs, bounded replay and explicit replay-gap reset are implemented. Browser EventSource supplies reconnect mechanics; server Last-Event-ID handling is wire tested.",
+      "platforms": "Local evidence identifies macOS arm64; configured platform CI is not proof until its immutable run passes. Real-service platform jobs are Linux; Windows wire/native checks do not imply real PostgreSQL/Redis service execution."
+    },
+    {
+      "id": "P18",
+      "feature": "OpenTelemetry Integration",
+      "requirement": "W3C `traceparent` propagation, automatic spans for DB queries, external HTTP calls, and job execution, with OTLP export.",
+      "assessment": "official_collector_supported_final_source_refresh_pending",
+      "implementation": [
+        "LeanWeave/Observability/Trace.lean",
+        "LeanWeave/Observability/Jobs.lean",
+        "LeanWeave/Observability/Export.lean",
+        "adapters/postgres/LeanWeavePostgres/Pool.lean",
+        "adapters/http/LeanWeaveHttp/Client.lean",
+        "adapters/http/LeanWeaveHttp/Otlp.lean"
+      ],
+      "recorded_evidence": [
+        "docs/platform/external-result.json",
+        "adapters/http/test/wire-result.json",
+        "docs/platform/platform-result.json"
+      ],
+      "checks": [
+        "test/platform/external.py",
+        "integration/platform/Main.lean",
+        "LeanWeave/Test/PlatformOperations.lean"
+      ],
+      "scope_and_limits": "Real official Collector received6 request/SQL/HTTP/job spans with propagated parents and no SQL parameters. Worker-local factories supply tracers; job spans start before execution. OTLP is HTTP JSON trace export with bounded at-least-once retries, not a complete all-signals SDK. Final source changes require report refresh.",
+      "platforms": "Local evidence identifies macOS arm64; configured platform CI is not proof until its immutable run passes. Real-service platform jobs are Linux; Windows wire/native checks do not imply real PostgreSQL/Redis service execution."
+    },
+    {
+      "id": "P19",
+      "feature": "Structured Logging with Sampling",
+      "requirement": "Context-aware logging (request ID, tenant, user) with dynamic sampling rates to reduce noise in high-traffic environments.",
+      "assessment": "implemented_local_evidence_refresh_pending",
+      "implementation": [
+        "LeanWeave/Observability/Logging.lean",
+        "LeanWeave/Observability/File.lean"
+      ],
+      "recorded_evidence": [
+        "docs/platform/platform-result.json"
+      ],
+      "checks": [
+        "LeanWeave/Test/PlatformOperations.lean"
+      ],
+      "scope_and_limits": "Bounded context-correlated JSON records, dynamic sampling/level, redaction and a dedicated asynchronous file sink are present. Errors survive sampling subject to explicit bounds/minimum level; overload/drop accounting is observable.",
+      "platforms": "Local evidence identifies macOS arm64; configured platform CI is not proof until its immutable run passes. Real-service platform jobs are Linux; Windows wire/native checks do not imply real PostgreSQL/Redis service execution."
+    },
+    {
+      "id": "P20",
+      "feature": "Health Check Probes",
+      "requirement": "Distinct `/health/live` (process alive), `/health/ready` (dependencies connected), and `/health/startup` (initialization complete) endpoints.",
+      "assessment": "implemented_local_evidence_refresh_pending",
+      "implementation": [
+        "LeanWeave/Operations/Health.lean"
+      ],
+      "recorded_evidence": [
+        "docs/platform/platform-result.json"
+      ],
+      "checks": [
+        "LeanWeave/Test/PlatformOperations.lean"
+      ],
+      "scope_and_limits": "Separate live/ready/startup endpoints consume published readiness snapshots and do not block on dependency probes during requests. Application owners must publish actual readiness and mount outside auth; states/HEAD/drain behavior are tested.",
+      "platforms": "Local evidence identifies macOS arm64; configured platform CI is not proof until its immutable run passes. Real-service platform jobs are Linux; Windows wire/native checks do not imply real PostgreSQL/Redis service execution."
+    },
+    {
+      "id": "P21",
+      "feature": "Graceful Drain & Shutdown",
+      "requirement": "On `SIGTERM`, stop accepting new connections, finish in-flight requests, flush job queues, close DB pools, and exit cleanly within a timeout.",
+      "assessment": "real_sigterm_supported_with_cooperative_io_boundary",
+      "implementation": [
+        "LeanWeave/Operations/Runtime.lean",
+        "LeanWeave/Jobs/Lifecycle.lean",
+        "LeanWeave/Core/Server.lean",
+        "LeanWeave/Observability/File.lean"
+      ],
+      "recorded_evidence": [
+        "docs/platform/jobs-result.json",
+        "adapters/postgres/test/live-result.json",
+        "docs/platform/platform-result.json"
+      ],
+      "checks": [
+        "adapters/postgres/test/jobs_cluster.py",
+        "LeanWeave/Test/PlatformOperations.lean",
+        "lean-net:test/test_application_streams.py"
+      ],
+      "scope_and_limits": "Actual SIGTERM stops admission, finishes queued/running jobs or cancels/requeues them, closes owner DB pools and exits normally within tested budgets. One absolute native deadline is propagated. Blocking kernel file write/flush or arbitrary noncooperative user IO cannot be hard-preempted; docs now state that OS-stall boundary. No unconditional hard realtime exit guarantee is inferred.",
+      "platforms": "Local evidence identifies macOS arm64; configured platform CI is not proof until its immutable run passes. Real-service platform jobs are Linux; Windows wire/native checks do not imply real PostgreSQL/Redis service execution."
+    },
+    {
+      "id": "P22",
+      "feature": "Audit Logging",
+      "requirement": "Immutable, structured records of security-sensitive actions (login, permission changes, data exports) with tamper-evident hashing.",
+      "assessment": "implemented_local_persistence_evidence_refresh_pending",
+      "implementation": [
+        "LeanWeave/Security/Audit.lean",
+        "LeanWeave/Security/Journal.lean",
+        "LeanWeave/Observability/File.lean"
+      ],
+      "recorded_evidence": [
+        "docs/platform/platform-result.json"
+      ],
+      "checks": [
+        "LeanWeave/Test/PlatformOperations.lean"
+      ],
+      "scope_and_limits": "Immutable application records, SHA256 chain, single-writer append/flush receipts, replay, tamper/reorder/truncation and locking checks exist. Detecting tail replacement/full rewrite requires an externally trusted checkpoint. OS flush is not an fsync/power-loss or WORM-storage guarantee; sensitive applications explicitly await Journal.record.",
+      "platforms": "Local evidence identifies macOS arm64; configured platform CI is not proof until its immutable run passes. Real-service platform jobs are Linux; Windows wire/native checks do not imply real PostgreSQL/Redis service execution."
+    },
+    {
+      "id": "P23",
+      "feature": "Secrets Management",
+      "requirement": "Integration with Vault, AWS Secrets Manager, or environment encryption, with automatic rotation and in-memory-only decryption.",
+      "assessment": "official_vault_supported_final_source_refresh_pending",
+      "implementation": [
+        "LeanWeave/Secrets/Manager.lean",
+        "adapters/http/LeanWeaveHttp/Vault.lean"
+      ],
+      "recorded_evidence": [
+        "docs/platform/external-result.json",
+        "docs/platform/platform-result.json"
+      ],
+      "checks": [
+        "test/platform/external.py",
+        "LeanWeave/Test/PlatformOperations.lean"
+      ],
+      "scope_and_limits": "Real TLS-verified Vault KV v2 load/rotation, bootstrap token replacement/revocation and failed-refresh expiry are exercised. Values stay in opaque memory objects; no physical zeroization of every immutable copy is promised. Vault satisfies the requested provider alternative; AWS/env encryption are not claimed.",
+      "platforms": "Local evidence identifies macOS arm64; configured platform CI is not proof until its immutable run passes. Real-service platform jobs are Linux; Windows wire/native checks do not imply real PostgreSQL/Redis service execution."
+    },
+    {
+      "id": "P24",
+      "feature": "Content Security Policy (CSP) Builder",
+      "requirement": "A typed DSL for constructing CSP headers that prevent XSS and data exfiltration, with nonce support.",
+      "assessment": "closed_cache_integration_gap_final_refresh_pending",
+      "implementation": [
+        "LeanWeave/Security/Csp.lean",
+        "LeanWeave/Cache/Response.lean"
+      ],
+      "recorded_evidence": [
+        "test/evidence/realtime-browser.json",
+        "docs/platform/evidence/platform-compile.json",
+        "docs/platform/platform-result.json"
+      ],
+      "checks": [
+        "LeanWeave/Test/PlatformOperations.lean",
+        "scripts/test_platform_compile.py",
+        "test/browser_realtime.py"
+      ],
+      "scope_and_limits": "Typed csp! validation and per-response random nonce/header binding are browser enforced. Context nonce and nonce-bearing CSP/report-only responses now bypass cache in both pipeline orders, including request fragments and Redis core guards. Low-level explicit-key fragments remain caller responsibility. Current-source regression suite refresh is required.",
+      "platforms": "Local evidence identifies macOS arm64; configured platform CI is not proof until its immutable run passes. Real-service platform jobs are Linux; Windows wire/native checks do not imply real PostgreSQL/Redis service execution."
+    },
+    {
+      "id": "P25",
+      "feature": "Plugin System with Hot Reload",
+      "requirement": "Define lifecycle hooks (`onStart`, `onRequest`, `onShutdown`) that plugins can implement. Support dynamic loading/unloading in development without restarting the server.",
+      "assessment": "local_native_supported",
+      "implementation": [
+        "LeanWeave/Plugin/Manager.lean",
+        "adapters/plugins/LeanWeavePlugins/Loader.lean",
+        "adapters/plugins/c/plugins.c"
+      ],
+      "recorded_evidence": [
+        "docs/platform/plugins-result.json"
+      ],
+      "checks": [
+        "adapters/plugins/test/test_reload.py"
+      ],
+      "scope_and_limits": "True same-path shared-library hot reload without restart; old deferred requests/streams retain generations until completion/cancel. Max generations/in-flight, failed-load preservation, H1/H2 reset/HEAD/SIGTERM are proved locally. Native C ABI is trusted code, not a sandbox; no unsafe unloading of Lean global initializer closures is attempted.",
+      "platforms": "Local evidence identifies macOS arm64; configured platform CI is not proof until its immutable run passes. Real-service platform jobs are Linux; Windows wire/native checks do not imply real PostgreSQL/Redis service execution."
+    },
+    {
+      "id": "P26",
+      "feature": "Lean 4 Macro-based DSLs",
+      "requirement": "Use Lean's hygienic macros to create expressive, compile-time-checked DSLs for routes, schemas, and policies, catching errors at build time rather than runtime.",
+      "assessment": "closed_hygiene_gap_regressions_added_final_refresh_pending",
+      "implementation": [
+        "LeanWeave/Router/DSL.lean",
+        "LeanWeave/Schema/DSL.lean",
+        "LeanWeave/OpenApi/DSL.lean",
+        "LeanWeave/Security/Policy.lean",
+        "LeanWeave/Security/Csp.lean"
+      ],
+      "recorded_evidence": [
+        "docs/platform/evidence/protocols-compile.json",
+        "docs/platform/evidence/platform-compile.json",
+        "docs/platform/platform-result.json"
+      ],
+      "checks": [
+        "LeanWeave/Test/MacroHygiene.lean",
+        "scripts/test_protocol_compile.py",
+        "scripts/test_platform_compile.py"
+      ],
+      "scope_and_limits": "Real compile-time DSLs reject ambiguous routes, wrong handler types, contradictory schemas and invalid policies. Audit reproduced silent caller capture by fixed Router binders; fresh names and runtime section/context/implicit/typeclass/reverse-URL regressions now close that defect in source. The final rebuilt suite must establish the fix.",
+      "platforms": "Local evidence identifies macOS arm64; configured platform CI is not proof until its immutable run passes. Real-service platform jobs are Linux; Windows wire/native checks do not imply real PostgreSQL/Redis service execution."
+    },
+    {
+      "id": "P27",
+      "feature": "Built-in API Documentation",
+      "requirement": "Auto-generate OpenAPI/Swagger specs from route definitions and type signatures, reducing documentation drift.",
+      "assessment": "local_generated_spec_supported_final_ci_pending",
+      "implementation": [
+        "LeanWeave/OpenApi/DSL.lean",
+        "LeanWeave/OpenApi/Basic.lean",
+        "LeanWeave/Schema/DSL.lean"
+      ],
+      "recorded_evidence": [
+        "docs/platform/evidence/protocols-wire.json"
+      ],
+      "checks": [
+        "scripts/test_protocols.py",
+        "scripts/test_protocol_compile.py"
+      ],
+      "scope_and_limits": "weave_api drives actual routing, checked handler types/codecs and OpenAPI3.1.1 JSON from one declaration; missing metadata/collisions are rejected. Native live spec endpoint is tested. Swagger UI scaffolding uses supplied hosted assets; complete arbitrary Lean type reflection or a bundled Swagger distribution is not claimed.",
+      "platforms": "Local evidence identifies macOS arm64; configured platform CI is not proof until its immutable run passes. Real-service platform jobs are Linux; Windows wire/native checks do not imply real PostgreSQL/Redis service execution."
+    }
+  ]
+}
