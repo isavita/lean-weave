@@ -1,0 +1,6 @@
+name = "lean-weave"
+version = "0.1.0"
+defaultTargets = ["LeanWeave"]
+
+[[lean_lib]]
+name = "LeanWeave"
