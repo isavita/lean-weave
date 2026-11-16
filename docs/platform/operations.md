@@ -215,11 +215,14 @@ python test/platform/fetch_tools.py
 export WEAVE_VAULT_BINARY="$HOME/.cache/leanweave-test-tools/vault-1.20.0/vault"
 export WEAVE_OTELCOL_BINARY="$HOME/.cache/leanweave-test-tools/otelcol-0.131.0/otelcol"
 export WEAVE_PG_BIN="$(pg_config --bindir)"
-python test/platform/run.py --postgres --http --external
-python scripts/benchmark.py --platform --iterations 5000 --output benchmarks/platform-results.json
+lake env python test/platform/run.py --postgres --http --external
+lake env python scripts/benchmark.py --platform --iterations 5000 --output benchmarks/platform-results.json
 ```
 
 The fetcher pins test-only vendor versions and verifies their SHA-256 manifests.
+Launch acceptance runners through `lake env python`, particularly on Windows:
+it exposes native toolchain paths to Python subprocesses even when Git Bash
+locates Elan through a POSIX-style path that Windows cannot resolve.
 `platform-result.json` records source hashes and commands; separate reports cover
 119 independent Python crypto vectors, actual non-superuser PostgreSQL TLS/RLS,
 real Vault secret/token rotation and an official Collector receiving six real

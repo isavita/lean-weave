@@ -71,7 +71,7 @@ jobs:
       - name: Install HTTP2 test codec
         run: python -m pip install --index-url https://pypi.org/simple --require-hashes -r scripts/requirements-test.txt
       - name: Platform contracts, independent crypto and HTTP/TLS
-        run: python test/platform/run.py --http
+        run: lake env python test/platform/run.py --http
       - name: Native jobs and workflow contracts
         run: .lake/build/bin/weave-jobs-test
       - name: Native stream, PubSub and presence contracts
@@ -79,11 +79,11 @@ jobs:
       - name: Install official protocol clients
         run: python -m pip install --index-url https://pypi.org/simple -r scripts/requirements-protocols.txt
       - name: Realtime streaming HTTP1/HTTP2 wire parity
-        run: python test/test_realtime.py -v
+        run: lake env python test/test_realtime.py -v
       - name: GraphQL execution and websocket protocol
         run: |
           .lake/build/bin/weave-graphql-test
-          python test/test_graphql.py -v
+          lake env python test/test_graphql.py -v
       - uses: actions/setup-node@v6
         with:
           node-version: '24'
@@ -92,15 +92,15 @@ jobs:
           npm ci --prefix test/graphql-client --ignore-scripts --no-audit --no-fund
           node test/graphql-client/acceptance.mjs
       - name: Typed protocol compiler rejection checks
-        run: python scripts/test_protocol_compile.py
+        run: lake env python scripts/test_protocol_compile.py
       - name: Official gRPC and gRPC-Web HTTP1/HTTP2 interoperability
-        run: python scripts/test_protocols.py --report docs/platform/evidence/protocols-ci.json
+        run: lake env python scripts/test_protocols.py --report docs/platform/evidence/protocols-ci.json
       - name: Platform allocation sample
-        run: python scripts/benchmark.py --platform --iterations 2000 --output benchmarks/platform-ci-results.json
+        run: lake env python scripts/benchmark.py --platform --iterations 2000 --output benchmarks/platform-ci-results.json
       - name: Native plugin reload and lifecycle
         run: |
           lake -d adapters/plugins build weave-plugin-fixture
-          python adapters/plugins/test/test_reload.py --output docs/platform/plugins-ci-result.json
+          lake env python adapters/plugins/test/test_reload.py --output docs/platform/plugins-ci-result.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -143,15 +143,15 @@ jobs:
       - name: Install HTTP2 test codec
         run: python -m pip install --index-url https://pypi.org/simple --require-hashes -r scripts/requirements-test.txt
       - name: Real PostgreSQL RLS, Vault TLS rotation and official OTLP
-        run: python test/platform/run.py --postgres --http --external
+        run: lake env python test/platform/run.py --postgres --http --external
       - name: Durable jobs, transactional outbox, workflows and SIGTERM recovery
         run: |
           lake -d adapters/postgres build weave-pg-jobs-test
-          python adapters/postgres/test/jobs_cluster.py --output docs/platform/jobs-ci-result.json
+          lake env python adapters/postgres/test/jobs_cluster.py --output docs/platform/jobs-ci-result.json
       - name: Distributed PubSub and presence
         run: |
           lake -d adapters/redis build weave-redis-pubsub-fixture
-          python adapters/redis/test/test_pubsub_presence.py
+          lake env python adapters/redis/test/test_pubsub_presence.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -199,8 +199,8 @@ jobs:
       - name: Live WebSocket/SSE, CSP and official gRPC-Web browser interoperability
         run: |
           for browser in chromium webkit; do
-            python test/browser_realtime.py --browser "$browser" --output "output/playwright/realtime-$browser" --report "docs/platform/evidence/realtime-$browser-ci.json"
-            python scripts/test_grpc_web_browser.py --browser "$browser" --report "docs/platform/evidence/grpc-web-$browser-ci.json"
+            lake env python test/browser_realtime.py --browser "$browser" --output "output/playwright/realtime-$browser" --report "docs/platform/evidence/realtime-$browser-ci.json"
+            lake env python scripts/test_grpc_web_browser.py --browser "$browser" --report "docs/platform/evidence/grpc-web-$browser-ci.json"
           done
       - uses: actions/upload-artifact@v4
         if: always()
