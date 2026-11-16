@@ -105,6 +105,36 @@ class GraphQLWire(unittest.TestCase):
         self.assertEqual(status, 200); self.assertEqual(result['data']['__type']['kind'], 'OBJECT')
         self.assertEqual(result['data']['__schema']['queryType']['name'], 'Query')
 
+    def test_head_reuses_get_metadata_without_body_on_both_protocols(self):
+        path = '/graphql?' + urlencode({'query':'{counter{value label}}'})
+        connection = http.client.HTTPConnection('127.0.0.1', self.port, timeout=3)
+        self.addCleanup(connection.close)
+        connection.request('GET', path)
+        get = connection.getresponse(); get_headers = {key.lower():value for key,value in get.getheaders()}
+        body = get.read(); self.assertEqual(get.status,200); self.assertTrue(body)
+        connection.request('HEAD', path)
+        head = connection.getresponse(); head_headers = {key.lower():value for key,value in head.getheaders()}
+        self.assertEqual((head.status,head.read()),(200,b''))
+        for field in ['content-type','content-length','cache-control']:
+            self.assertEqual(head_headers[field],get_headers[field])
+        connection.request('GET', path)
+        self.assertEqual(connection.getresponse().read(),body)
+        peer = H2Client(self.port); self.addCleanup(peer.close)
+        peer.request(1,path.encode()); self.assertEqual(peer.response(1),body)
+        peer.request(3,path.encode(),method=b'HEAD'); self.assertEqual(peer.response(3),b'')
+        get_headers = dict(peer.headers[1][0].headers); head_headers = dict(peer.headers[3][0].headers)
+        for field in [b'content-type',b'content-length',b'cache-control']:
+            self.assertEqual(head_headers[field],get_headers[field])
+        self.assertEqual(head_headers[b'content-length'],str(len(body)).encode())
+        self.assertFalse(any(item.kind == 0 and item.stream == 3 for item in peer.frames), 'HEAD emitted a DATA frame')
+        mutation = '/graphql?' + urlencode({'query':'mutation{increment(amount:1){value}}'})
+        connection.request('HEAD',mutation)
+        response = connection.getresponse()
+        self.assertEqual((response.status,response.read()),(405,b''))
+        self.assertEqual(self.http('{counter{value}}')[1]['data']['counter']['value'],0)
+        status, result = self.http('{echo(text:"a+b c")}', method='GET')
+        self.assertEqual((status,result['data']['echo']),(200,'a+b c'))
+
     def test_http2_query_and_cooperative_resolver_match_http1(self):
         peer = H2Client(self.port); self.addCleanup(peer.close)
         body = json.dumps({'query':'{slow counter{value}}'}).encode()

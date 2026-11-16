@@ -26,7 +26,10 @@ schema. This is an executable bounded profile, not a claim of complete GraphQL
 spec conformance. Generated names for nested value/input types are stable and
 visible through introspection.
 
-`GraphQL.handler` accepts bounded JSON POSTs and query-only GETs. Mount it in the
+`GraphQL.handler` accepts bounded JSON POSTs and query-only GET/HEAD requests. HEAD executes the same query path and lets native
+HTTP/1+HTTP/2 framing preserve GET metadata while suppressing body bytes.
+GET/HEAD parameters use URLSearchParams form decoding: `+` means a space,
+`%2B` remains a literal plus, and the path is never decoded again. Mount it in the
 application's authenticated API pipeline. A resolver may use AppM.await without
 creating a request task. Configure Server.appRetainedBytes to cover the request
 AST and accumulated output while awaiting; the native fixture reserves 1MiB.

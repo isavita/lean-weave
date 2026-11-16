@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
 import {createServer} from 'node:net';
 import {fileURLToPath} from 'node:url';
+import {readFile} from 'node:fs/promises';
+import {createHash} from 'node:crypto';
 import {getIntrospectionQuery, buildClientSchema, assertValidSchema, printSchema, parse, validate, version} from 'graphql';
 import {createClient} from 'graphql-ws';
 import WebSocket from 'ws';
@@ -76,7 +78,21 @@ try {
   }
   assert.equal(cancelled,1,'client completion cleaned subscription exactly once');
   await client.dispose(); client = null;
-  console.log(JSON.stringify({node:process.version,platform:process.platform,arch:process.arch,graphql:version,graphqlWs:'6.4.2',ws:'8.23.0',officialIntrospection:true,buildClientSchema:true,assertValidSchema:true,typedQuery:true,typedMutation:true,subscriptionNext:true,clientCompleteCleanupOnce:true}));
+  const inputs = [
+    'LeanWeave/GraphQL.lean', 'LeanWeave/GraphQL/Parser.lean', 'LeanWeave/GraphQL/ParserTest.lean',
+    'LeanWeave/GraphQL/Schema.lean', 'LeanWeave/GraphQL/Introspection.lean',
+    'LeanWeave/GraphQL/Execution.lean', 'LeanWeave/GraphQL/HTTP.lean', 'LeanWeave/GraphQL/WebSocket.lean',
+    'LeanWeave/Test/GraphQLSupport.lean', 'LeanWeave/Test/GraphQLFixture.lean', 'LeanWeave/Test/GraphQLMain.lean',
+    'test/test_graphql.py', 'test/graphql-client/acceptance.mjs',
+    'test/graphql-client/package.json', 'test/graphql-client/package-lock.json',
+    'lean-toolchain', 'lakefile.toml', 'lake-manifest.json'
+  ];
+  const sourceHashes = Object.fromEntries(await Promise.all(inputs.map(async path =>
+    [path, createHash('sha256').update(await readFile(root + path)).digest('hex')])));
+  const fixtureSha256 = createHash('sha256').update(await readFile(fixture)).digest('hex');
+  const manifest = JSON.parse(await readFile(root + 'lake-manifest.json','utf8'));
+  const leanNetRevision = manifest.packages.find(pkg => pkg.url?.endsWith('/lean-net.git'))?.rev || null;
+  console.log(JSON.stringify({node:process.version,platform:process.platform,arch:process.arch,leanNetRevision,fixtureSha256,sourceHashes,graphql:version,graphqlWs:'6.4.2',ws:'8.23.0',officialIntrospection:true,buildClientSchema:true,assertValidSchema:true,typedQuery:true,typedMutation:true,subscriptionNext:true,clientCompleteCleanupOnce:true}));
 } finally {
   if(client) await client.dispose();
   if(server.exitCode === null) { if(process.platform === 'win32') server.stdin.end('stop\n'); else server.kill('SIGINT'); }
