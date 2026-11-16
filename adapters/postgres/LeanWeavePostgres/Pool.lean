@@ -1,5 +1,6 @@
 import LeanWeavePostgres.Native
 import Std.Net.Addr
+import LeanWeave.Observability.Trace
 
 namespace LeanWeave.Postgres
 
@@ -99,6 +100,7 @@ structure Connection where
   private leased : IO.Ref Bool
   private connected : IO.Ref Bool
   private failed : IO.Ref Bool
+  private trace : Option (Observability.Tracer × Option String) := none
 
 /-- Worker-local fixed-capacity pool. The waiting queue stores only resumable
     leases; saturation fails immediately with 503, without allocating a task. -/
@@ -108,6 +110,8 @@ structure Pool where
   private connections : IO.Ref (Array Connection)
   private waiting : IO.Ref Nat
   private closed : IO.Ref Bool
+  private tracer : Option Observability.Tracer := none
+  private parentTrace : Option String := none
 
 private def attemptIO (action : IO α) : IO (Except AppError α) := do
   try return .ok (← action)
@@ -118,10 +122,10 @@ private def databaseIO (action : IO α) : AppM α := do
   | .ok value => return value
   | .error error => throw error
 
-def Pool.create (config : Config := {}) : IO Pool := do
+def Pool.create (config : Config := {}) (tracer : Option Observability.Tracer := none) : IO Pool := do
   match config.validate with
   | .error message => throw (IO.userError message)
-  | .ok _ => return ⟨config, ← IO.mkRef #[], ← IO.mkRef 0, ← IO.mkRef false⟩
+  | .ok _ => return { config, connections := ← IO.mkRef #[], waiting := ← IO.mkRef 0, closed := ← IO.mkRef false, tracer }
 
 private def Connection.close (connection : Connection) : IO Unit := do
   connection.failed.set true
@@ -149,7 +153,7 @@ private def Pool.tryAcquire (pool : Pool) : IO (Option Connection) := do
   if available.isSome then return available
   if live.size >= pool.config.maxConnections then return none
   let native ← Native.start pool.config.options
-  let connection := Connection.mk native pool.config (← IO.mkRef true) (← IO.mkRef false) (← IO.mkRef false)
+  let connection := Connection.mk native pool.config (← IO.mkRef true) (← IO.mkRef false) (← IO.mkRef false) none
   pool.connections.set (live.push connection)
   return some connection
 
@@ -195,7 +199,13 @@ private def Connection.release (connection : Connection) : IO Unit := do
     disconnect cancellation all release the lease; an open transaction is closed. -/
 def Pool.withConnection (pool : Pool) (use : Connection → AppM α) : AppM α := do
   let connection ← pool.acquire
+  let connection := { connection with trace := pool.tracer.map (fun tracer => (tracer, pool.parentTrace)) }
   AppM.ensuring (do connection.ensureConnected; use connection) connection.release
+
+/-- Clone only tracing context while sharing owner-local pool state. Construct
+per request; concurrent leases never depend on a mutable thread-local parent. -/
+def Pool.withTraceContext (pool : Pool) (context : Context) : Pool :=
+  { pool with parentTrace := Observability.traceparent context }
 
 /-- Extended-query protocol separates SQL and parameter bytes. SQL NULL is `none`.
     Results use single-row mode and enforce row, column and retained-byte bounds. -/
@@ -214,17 +224,31 @@ def Connection.query (connection : Connection) (sql : String)
       parameterBytes := parameterBytes + value.utf8ByteSize
   if parameterBytes > connection.config.maxParameterBytes then
     throw { status := 413, message := "SQL parameter budget exceeded" }
-  databaseIO (Native.send connection.native sql params connection.config.maxRows.toUSize
-    connection.config.maxResultBytes.toUSize connection.config.maxColumns.toUSize)
-  AppM.await
-    (do
-      try return (← Native.poll connection.native).map Except.ok
-      catch error =>
-        connection.close
-        let status := if (error.toString.splitOn "57014").length > 1 then 504 else 503
-        return some (.error { status, message := error.toString }))
-    (fun _ => connection.close) connection.config.queryTimeoutMs
-    (connection.config.maxResultBytes + parameterBytes + sql.utf8ByteSize + params.size * 64 + 256)
+  let span ← match connection.trace with
+    | some (tracer, parent) => some <$> databaseIO (tracer.start "postgres.query" parent .client #[
+      { key := "db.system.name", value := .text "postgresql" },
+      { key := "server.address", value := .text connection.config.hostName }])
+    | none => pure none
+  let finish := fun status code => do
+    if let some span := span then span.finish status #[] code
+  (do
+    try
+      databaseIO (Native.send connection.native sql params connection.config.maxRows.toUSize
+        connection.config.maxResultBytes.toUSize connection.config.maxColumns.toUSize)
+      let result ← AppM.await
+        (do
+          try return (← Native.poll connection.native).map Except.ok
+          catch error =>
+            connection.close
+            let status := if (error.toString.splitOn "57014").length > 1 then 504 else 503
+            return some (.error { status, message := error.toString }))
+        (fun _ => connection.close) connection.config.queryTimeoutMs
+        (connection.config.maxResultBytes + parameterBytes + sql.utf8ByteSize + params.size * 64 + 256)
+      finish .unset ""
+      return result
+    catch error =>
+      finish .error "database.error"
+      throw error).ensuring (finish .error "database.cancelled_or_failed")
 
 def Pool.query (pool : Pool) (sql : String) (params : Array (Option String) := #[]) : AppM Result :=
   pool.withConnection fun connection => connection.query sql params

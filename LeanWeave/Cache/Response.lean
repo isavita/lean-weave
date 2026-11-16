@@ -119,7 +119,7 @@ def decodeResponse (bytes : ByteArray) : Option (Response × Nat) := do
     Miss contenders fail fast; they never form an unbounded waiter queue. -/
 def middleware (store : Store) (policy : Policy := {}) : Middleware := fun next ctx => do
   let policy := effectivePolicy ctx policy
-  if !eligibleRequest ctx || policy.vary.any (fun name => (ctx.request.headers.filter (fun h => h.name.toLower == name.toLower)).size > 1) then return ← next ctx
+  if policy.ttlMs == 0 || !eligibleRequest ctx || policy.vary.any (fun name => (ctx.request.headers.filter (fun h => h.name.toLower == name.toLower)).size > 1) then return ← next ctx
   let cacheKey := responseKey ctx policy
   if let some bytes ← store.get cacheKey (← IO.monoMsNow) then
     if let some (response, insertedAt) := decodeResponse bytes then

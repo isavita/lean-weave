@@ -1,0 +1,34 @@
+{
+  "vault": {
+    "passed": true,
+    "official_binary": "Vault v1.20.0 (6fdd6b59e97d97a9e19b0fb5304bf879c190295e), built 2025-06-23T10:21:30Z",
+    "binary_sha256": "5e8c65008d5f92b1315e0b2d4ada38f1997652ce4be3f169fe8e13921aaa727d",
+    "tls_verified": true,
+    "kv2_rotation": true,
+    "bootstrap_token_rotation_and_old_revocation": true,
+    "failed_refresh_expires": true,
+    "no_persistent_service": true
+  },
+  "opentelemetry": {
+    "passed": true,
+    "official_binary": "otelcol version 0.131.0",
+    "binary_sha256": "d11027832b4f304b8d80b6eae7a41681aaa3e343b446e938ad55be9078bc69ac",
+    "transport": "native OTLP/HTTP JSON",
+    "spans_received": 6,
+    "span_names": [
+      "postgres.query",
+      "HTTP POST",
+      "postgres.query",
+      "HTTP POST",
+      "job integration",
+      "integration.request"
+    ],
+    "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+    "parent_contexts": 3,
+    "automatic_real_postgres_queries": 2,
+    "automatic_real_http_calls": 2,
+    "actual_job_execution": true,
+    "no_sql_parameters_exported": true,
+    "no_persistent_service": true
+  }
+}

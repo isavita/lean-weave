@@ -23,7 +23,8 @@ Redis is the shared authoritative cache layer; no local L1 is retained. Fill
 publication atomically checks lease ownership, so invalidation and lease expiry
 prevent a late fill from repopulating the key. -/
 def middleware (client : Client) (policy : Cache.Policy := {}) : Middleware := fun next ctx => do
-  if !Cache.eligibleRequest ctx || policy.vary.any (fun name =>
+  let policy := Cache.effectivePolicy ctx policy
+  if policy.ttlMs == 0 || !Cache.eligibleRequest ctx || policy.vary.any (fun name =>
       (ctx.request.headers.filter (fun h => h.name.toLower == name.toLower)).size > 1) then
     return ← next ctx
   let key := Cache.responseKey ctx policy
@@ -58,7 +59,8 @@ route/query/locale/Vary isolation as response caching. HEAD misses do not fill.
 On cancellation the bounded fill lease expires; no untracked cleanup task runs. -/
 def fragment (client : Client) (ctx : Context) (name : String) (build : AppM ByteArray)
     (policy : Cache.Policy := {}) : AppM ByteArray := do
-  if !Cache.eligibleRequest ctx || policy.vary.any (fun name =>
+  let policy := Cache.effectivePolicy ctx policy
+  if policy.ttlMs == 0 || !Cache.eligibleRequest ctx || policy.vary.any (fun name =>
       (ctx.request.headers.filter (fun h => h.name.toLower == name.toLower)).size > 1) then
     return ← build
   let key := Cache.key #["fragment", name, Cache.responseKey ctx policy]

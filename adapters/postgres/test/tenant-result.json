@@ -1,0 +1,10 @@
+{
+  "passed": true,
+  "kind": "real PostgreSQL TLS with non-superuser FORCE RLS",
+  "tenant_isolation": true,
+  "pool_scope_reset": true,
+  "parameter_injection_rejected": true,
+  "tenant_override_rejected": true,
+  "actual_migration_helper_executed": true,
+  "persistent_service_started": false
+}
