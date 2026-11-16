@@ -8,13 +8,27 @@ private opaque backendInfo : IO String
 def drive (action : AppM α) (budget : Nat := 2 * 1024 * 1024) : IO (Except AppError α) := do
   let execution ← AppM.execute action budget
   try
-    for _ in [:10000] do
+    let cutoff := (← IO.monoMsNow) + 10000
+    while (← IO.monoMsNow) < cutoff do
       if let some result ← execution.poll then return result
       IO.sleep 1
     throw (IO.userError "client test timed out")
   finally execution.cancel .shutdown
 
 private def check (value : Bool) (message : String) : IO Unit := unless value do throw (IO.userError message)
+
+private def response (label : String) (value : Except AppError α) : IO α :=
+  match value with
+  | .ok value => pure value
+  | .error error => throw (IO.userError s!"{label} failed: status={error.status}, message={(error.message.take 256).toString}")
+
+private def verificationRejected (client : Http.Client) (label : String) : IO Unit := do
+  let started ← IO.monoMsNow
+  match ← drive (client.request {}) with
+  | .ok _ => throw (IO.userError (label ++ " was accepted"))
+  | .error error =>
+    check (error.status == 502) s!"{label} failed for an unexpected reason: status={error.status}, message={(error.message.take 256).toString}"
+    check ((← IO.monoMsNow) - started < client.config.timeoutMs - 1000) (label ++ " rejection consumed the request timeout")
 
 private def rejectedStartup (config : Http.Config) : IO Bool := do
   try
@@ -44,7 +58,7 @@ def main (args : List String) : IO Unit := do
   let client ← Http.Client.create {
     endpoint := { hostName := "localhost", hostAddr := "127.0.0.1", port := port.toUInt16, secure, caBundle := ca,preferHttp2 }
     maxActive := 2
-    timeoutMs := 200
+    timeoutMs := 5000
     maxResponseBytes := 4096 } (some tracer)
   try
     let ctx : Context := { request := { method := "GET", target := "/".toUTF8, headers := #[], body := ByteArray.empty }, attributes := #[
@@ -57,18 +71,28 @@ def main (args : List String) : IO Unit := do
       drive (client.request { method := "POST", path := "/echo", body := "native-http".toUTF8 } (some ctx))
     finally
       if secure then IO.FS.rename movedCA ca
-    let .ok echo := echo | throw (IO.userError "echo failed")
+    let echo ← response "echo" echo
     check (echo.status == 200 && String.fromUTF8! echo.body == "native-http") "echo mismatch"
     check (echo.header "x-protocol" == some expectedProtocol) "negotiated protocol mismatch or HTTP/2 fallback"
-    let .ok chunked ← drive (client.request { path := "/chunked" }) | throw (IO.userError "chunked failed")
+    let chunked ← response "chunked" (← drive (client.request { path := "/chunked" }))
     check (String.fromUTF8! chunked.body == "onetwo") "chunked decoding"
     check (chunked.header "x-end" == some "yes") "chunked/HTTP2 trailer decoding"
     check (chunked.header "x-protocol" == some expectedProtocol) "chunked/DATA protocol mismatch"
-    let .ok redirect ← drive (client.request { path := "/redirect" }) | throw (IO.userError "redirect failed")
+    let redirect ← response "redirect" (← drive (client.request { path := "/redirect" }))
     check (redirect.status == 302) "redirect was followed"
     check (redirect.header "x-protocol" == some expectedProtocol) "redirect protocol mismatch"
     check (!(← drive (client.request { path := "/oversized" })).isOk) "body bound not enforced"
-    check (!(← drive (client.request { path := "/slow" })).isOk) "timeout not enforced"
+    let timeoutClient ← Http.Client.create { client.config with timeoutMs := 1000 } (some tracer)
+    try
+      let started ← IO.monoMsNow
+      let result ← drive (timeoutClient.request { path := "/timeout" })
+      let elapsed := (← IO.monoMsNow) - started
+      match result with
+      | .ok _ => throw (IO.userError "deliberately withheld response did not time out")
+      | .error error => check ([502,504].contains error.status) s!"unexpected timeout failure status: {error.status}"
+      check (elapsed >= 900 && elapsed < 2000) s!"timeout did not follow its configured 1000ms deadline: {elapsed}ms"
+      check (← timeoutClient.isIdle) "timeout leaked client handle"
+    finally timeoutClient.close
     let pending ← AppM.execute (client.request { path := "/slow" }) client.config.retainedBytes
     let _ ← pending.poll
     pending.cancel .disconnected
@@ -97,15 +121,20 @@ def main (args : List String) : IO Unit := do
       check (← rejectedStartup { client.config with endpoint := { client.config.endpoint with caBundle := oversized } })
         "oversized CA file accepted during startup"
       let wrongName ← Http.Client.create { client.config with endpoint := { client.config.endpoint with hostName := "wrong.localhost" } }
-      try check (!(← drive (wrongName.request {})).isOk) "TLS hostname mismatch was accepted"
+      try verificationRejected wrongName "TLS hostname mismatch"
       finally wrongName.close
       let badCA := (← IO.getEnv "WEAVE_HTTP_BAD_CA").getD ""
       let wrongTrust ← Http.Client.create { client.config with endpoint := { client.config.endpoint with caBundle := badCA } }
-      try check (!(← drive (wrongTrust.request {})).isOk) "untrusted TLS certificate was accepted"
+      try verificationRejected wrongTrust "untrusted TLS certificate"
       finally wrongTrust.close
       let systemTrust ← Http.Client.create { client.config with endpoint := { client.config.endpoint with caBundle := "",systemTrust := true } }
-      try check (!(← drive (systemTrust.request {})).isOk) "opt-in system trust accepted an untrusted certificate"
+      try verificationRejected systemTrust "opt-in system trust with an untrusted certificate"
       finally systemTrust.close
+      let verified ← Http.Client.create client.config
+      try
+        let health ← response "verified endpoint after negative TLS cases" (← drive (verified.request {}))
+        check (health.status == 200 && health.header "x-protocol" == some expectedProtocol) "verified endpoint lost after rejection controls"
+      finally verified.close
     IO.println ((tracer.otlp spans).compress)
     IO.println s!"native HTTP bounded/trace/chunked/TLS/cancel tests passed ({expectedProtocol})"
   finally client.close

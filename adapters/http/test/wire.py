@@ -31,6 +31,7 @@ class Records:
     def init_records(self):
         self.traces = []
         self.alpns = []
+        self.timeouts = []
         self.lock = threading.Lock()
 
     def record(self, name, value):
@@ -59,9 +60,15 @@ class Handler(BaseHTTPRequestHandler):
         if isinstance(self.connection, ssl.SSLSocket):
             self.server.record("alpns", self.connection.selected_alpn_protocol())
         if self.path == "/slow": time.sleep(.5)
+        if self.path == "/timeout":
+            self.server.record("timeouts", self.path)
+            time.sleep(3)
         if self.path == "/echo":
             self.server.record("traces", self.headers.get("traceparent"))
             data = self.rfile.read(int(self.headers.get("content-length", "0")))
+            # The normal-request budget must tolerate a valid response slower
+            # than the old200ms fault-injection deadline, on every transport.
+            time.sleep(.35)
         elif self.path == "/oversized": data = b"x" * 8192
         elif self.path == "/redirect": data = b""
         else: data = b"ok"
@@ -127,7 +134,9 @@ class H2Handler(socketserver.BaseRequestHandler):
                         request = requests.pop(event.stream_id)
                         path = request["headers"][":path"]
                         if path == "/echo": self.server.record("traces", request["headers"].get("traceparent"))
-                        pending[event.stream_id] = (time.monotonic() + (.5 if path == "/slow" else 0), path, request["body"])
+                        if path == "/timeout": self.server.record("timeouts", path)
+                        delay = {"/slow": .5, "/echo": .35, "/timeout": 3}.get(path, 0)
+                        pending[event.stream_id] = (time.monotonic() + delay, path, request["body"])
                     elif isinstance(event, h2.events.StreamReset):
                         requests.pop(event.stream_id, None)
                         pending.pop(event.stream_id, None)
@@ -214,6 +223,7 @@ def main():
                 otlp = json.loads(output.stdout.splitlines()[0])
                 spans = otlp["resourceSpans"][0]["scopeSpans"][0]["spans"]
                 assert len(spans) == 6
+                assert server.timeouts == ["/timeout"], "deadline case must reach the peer before its response is withheld"
                 assert len(server.traces) == 1 and server.traces[0].startswith("00-4bf92f3577b34da6a3ce929d0e0e4736-")
                 assert server.traces[0].endswith("-01")
                 if tls: assert len(server.alpns) >= 3 and all(alpn == expected for alpn in server.alpns), server.alpns
@@ -222,6 +232,8 @@ def main():
                     "chunked_or_h2_data_and_trailers": True, "negative_tls_hostname_and_trust": tls,
                     "active_operation_limit": True, "header_origin_injection": True,
                     "startup_ca_no_request_file_dependency": tls,"strict_ca_startup_bounds": tls,"explicit_system_trust_opt_in": tls,
+                    "normal_timeout_ms": 5000, "positive_response_delay_ms": 350, "fault_timeout_ms": 1000,
+                    "withheld_response_ms": 3000, "timeout_observed_by_peer": True,
                     "negotiation_asserted_by_header": True, "server_connections": len(server.alpns), "runtime_backend": backend})
                 print(f"PASS native HTTP client {expected} {'TLS' if tls else 'plain'} bounded/trace/timeout/cancel/negotiation", flush=True)
             finally:
