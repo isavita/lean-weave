@@ -83,6 +83,9 @@ try {
     'LeanWeave/GraphQL/Schema.lean', 'LeanWeave/GraphQL/Introspection.lean',
     'LeanWeave/GraphQL/Execution.lean', 'LeanWeave/GraphQL/HTTP.lean', 'LeanWeave/GraphQL/WebSocket.lean',
     'LeanWeave/Test/GraphQLSupport.lean', 'LeanWeave/Test/GraphQLFixture.lean', 'LeanWeave/Test/GraphQLMain.lean',
+    'LeanWeave/Core/AppM.lean', 'LeanWeave/Core/Body.lean', 'LeanWeave/Core/Types.lean',
+    'LeanWeave/Core/Decode.lean', 'LeanWeave/Core/Stream.lean', 'LeanWeave/Core/Server.lean',
+    'LeanWeave/Schema/Basic.lean', 'LeanWeave/Realtime/PubSub.lean',
     'test/test_graphql.py', 'test/graphql-client/acceptance.mjs',
     'test/graphql-client/package.json', 'test/graphql-client/package-lock.json',
     'lean-toolchain', 'lakefile.toml', 'lake-manifest.json'
@@ -92,7 +95,7 @@ try {
   const fixtureSha256 = createHash('sha256').update(await readFile(fixture)).digest('hex');
   const manifest = JSON.parse(await readFile(root + 'lake-manifest.json','utf8'));
   const leanNetRevision = manifest.packages.find(pkg => pkg.url?.endsWith('/lean-net.git'))?.rev || null;
-  console.log(JSON.stringify({node:process.version,platform:process.platform,arch:process.arch,leanNetRevision,fixtureSha256,sourceHashes,graphql:version,graphqlWs:'6.4.2',ws:'8.23.0',officialIntrospection:true,buildClientSchema:true,assertValidSchema:true,typedQuery:true,typedMutation:true,subscriptionNext:true,clientCompleteCleanupOnce:true}));
+  console.log(JSON.stringify({recordedAt:new Date().toISOString(),node:process.version,platform:process.platform,arch:process.arch,leanNetRevision,fixtureSha256,sourceHashes,graphql:version,graphqlWs:'6.4.2',ws:'8.23.0',officialIntrospection:true,buildClientSchema:true,assertValidSchema:true,typedQuery:true,typedMutation:true,subscriptionNext:true,clientCompleteCleanupOnce:true}));
 } finally {
   if(client) await client.dispose();
   if(server.exitCode === null) { if(process.platform === 'win32') server.stdin.end('stop\n'); else server.kill('SIGINT'); }

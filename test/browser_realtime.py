@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Reproducible real-browser Live/CSP acceptance via Playwright CLI."""
 from pathlib import Path
-import argparse,hashlib,json,os,shlex,signal,socket,subprocess,tempfile,time,uuid
+import argparse,datetime,hashlib,json,os,shlex,signal,socket,subprocess,tempfile,time,uuid
 root=Path(__file__).resolve().parents[1]
 p=argparse.ArgumentParser();p.add_argument('--cli',default='npx --yes --package @playwright/cli@0.1.24 playwright-cli');p.add_argument('--browser',default='chromium');p.add_argument('--output',type=Path,default=root/'output/playwright/realtime');p.add_argument('--report',type=Path);a=p.parse_args()
 directory=a.output.resolve();directory.mkdir(parents=True,exist_ok=True)
@@ -29,7 +29,23 @@ with tempfile.TemporaryFile(mode='w+') as log:
   output=command('run-code',source)
   report=json.loads(output.split('### Result\n',1)[1].split('\n### ',1)[0])
   report['runner']='native loopback server + Playwright CLI real browser'
-  report['source_sha256']={str(file.relative_to(root)):hashlib.sha256(file.read_bytes()).hexdigest() for file in [root/'test/browser_realtime.cjs',root/'LeanWeave/Test/RealtimeFixture.lean',root/'LeanWeave/Live.lean',root/'LeanWeave/Live/Client.lean',root/'LeanWeave/Security/Csp.lean']}
+  inputs = [root/path for path in [
+   'test/browser_realtime.py','test/browser_realtime.cjs','test/test_realtime.py',
+   'LeanWeave/Test/RealtimeFixture.lean','LeanWeave/Live.lean',
+   'LeanWeave/Stream.lean','LeanWeave/SSE.lean','LeanWeave/Presence.lean',
+   'LeanWeave/Core/AppM.lean','LeanWeave/Core/Body.lean','LeanWeave/Core/Types.lean',
+   'LeanWeave/Core/Decode.lean','LeanWeave/Core/Server.lean','LeanWeave/Core/Stream.lean',
+   'LeanWeave/Security/Csp.lean','lean-toolchain','lakefile.toml','lake-manifest.json']]
+  for relative in ['LeanWeave/Live','LeanWeave/Realtime','LeanWeave/Html']:
+   inputs.extend((root/relative).glob('*.lean'))
+  report['source_sha256']={str(file.relative_to(root)):hashlib.sha256(file.read_bytes()).hexdigest() for file in sorted(set(inputs))}
+  report['fixture_sha256']=hashlib.sha256(executable.read_bytes()).hexdigest()
+  manifest=json.loads((root/'lake-manifest.json').read_text())
+  report['lean_net_revision']=next(package['rev'] for package in manifest['packages'] if 'lean-net' in package['name'])
+  report['recorded_at_utc']=datetime.datetime.now(datetime.timezone.utc).isoformat()
+  report['playwright_cli']=a.cli
+  report['source_commit']=subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip()
+  report['source_dirty']=bool(subprocess.check_output(['git','status','--porcelain'],cwd=root,text=True).strip())
   if a.report:a.report.parent.mkdir(parents=True,exist_ok=True);a.report.write_text(json.dumps(report,indent=2)+'\n')
   print(json.dumps(report,indent=2))
  finally:
