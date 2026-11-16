@@ -1,0 +1,9 @@
+{
+  "passed": true,
+  "kind": "controlled PostgreSQL wire peer, real libpq",
+  "queries": 40,
+  "parameter_separation": true,
+  "transaction_rollback_commit": true,
+  "migration_once": true,
+  "live_database_engine": false
+}

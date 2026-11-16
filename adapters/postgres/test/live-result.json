@@ -1,0 +1,18 @@
+{
+  "passed": true,
+  "kind": "real PostgreSQL in disposable localhost cluster",
+  "version": "postgres (PostgreSQL) 17.12 (Homebrew)",
+  "parameter_separation": true,
+  "transaction_rollback_commit": true,
+  "migration_idempotence": true,
+  "row_limit_reconnection": true,
+  "result_bytes_limit_reconnection": true,
+  "timeout_reconnection": true,
+  "bounded_waiters_cancellation": true,
+  "active_query_disconnect_cancellation": true,
+  "migration_checksum_drift_rejected": true,
+  "tls_verified": true,
+  "tls_hostname_mismatch_rejected": true,
+  "managed_http_pool_shutdown": true,
+  "persistent_service_started": false
+}

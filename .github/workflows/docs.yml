@@ -1,0 +1,64 @@
+name: API documentation
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: api-docs-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      LEAN_CC: cc
+      LEAN_NUM_THREADS: '2'
+      DISABLE_EQUATIONS: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install native documentation build dependencies
+        run: sudo apt-get update && sudo apt-get install -y libgmp-dev libuv1-dev libssl-dev zlib1g-dev libbrotli-dev pkg-config
+      - uses: leanprover/lean-action@v1
+        with:
+          auto-config: false
+          build: false
+          test: false
+          lint: false
+      - name: Build API reference
+        run: python3 docs/build.py
+      - name: Verify public package reference
+        run: |
+          test -s docs/.lake/build/doc/LeanWeaveDocs.html
+          test -s docs/.lake/build/doc/LeanNet.html
+          test -s docs/.lake/build/doc/LeanWeave.html
+          test -s docs/.lake/build/doc/LeanNet/HTTP/ReactorServer.html
+          test -s docs/.lake/build/doc/LeanWeave/Router/Runtime.html
+          python3 docs/prepare_site.py
+          touch docs/.lake/build/doc/.nojekyll
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: docs/.lake/build/doc
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy API reference
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,20 @@
+name = "lean-weave-tls"
+version = "0.1.0"
+defaultTargets = ["LeanWeaveTLS", "weave-tls-fixture"]
+
+[[require]]
+name = "lean-weave"
+path = "../.."
+
+[[require]]
+name = "lean-net-tls"
+git = "https://github.com/isavita/lean-net.git"
+rev = "058d68acd742607207f558e1ac8309762f996f04"
+subDir = "tls"
+
+[[lean_lib]]
+name = "LeanWeaveTLS"
+
+[[lean_exe]]
+name = "weave-tls-fixture"
+root = "Fixture"

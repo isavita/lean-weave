@@ -1,0 +1,39 @@
+{
+  "utc": "2026-11-16T08:26:26.678932+00:00",
+  "platform": "macOS-27.2.1-arm64-arm-64bit",
+  "machine": "arm64",
+  "processor": "arm",
+  "lean": "Lean (version 4.35.0, arm64-apple-darwin24.6.0, commit eb6cafb7290e8bd5f2937522d8d804f58f02bafc, Release)",
+  "commit": "2446cc26b836db669324031c68fd8b5cd4981a51",
+  "dirty": true,
+  "measurement": "Native wall time and IO.getNumHeartbeats thread-local small allocation deltas; excludes large byte buffers, native malloc, RSS, sockets and TLS. Counts include loop and IO scaffolding.",
+  "samples": [
+    {
+      "checksum": 1588890,
+      "iterations": 20000,
+      "name": "compiled_html",
+      "nanoseconds": 3869416,
+      "small_allocations": 20003,
+      "ns_per_iteration": 193.4708,
+      "small_allocations_per_iteration": 1.00015
+    },
+    {
+      "checksum": 2548890,
+      "iterations": 20000,
+      "name": "decode_route_render",
+      "nanoseconds": 106791417,
+      "small_allocations": 1884452,
+      "ns_per_iteration": 5339.57085,
+      "small_allocations_per_iteration": 94.2226
+    },
+    {
+      "checksum": 1360000,
+      "iterations": 20000,
+      "name": "fragment_cache_hit",
+      "nanoseconds": 2052833,
+      "small_allocations": 120002,
+      "ns_per_iteration": 102.64165,
+      "small_allocations_per_iteration": 6.0001
+    }
+  ]
+}

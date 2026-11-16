@@ -1,0 +1,100 @@
+name: Optional adapters
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  unix:
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - name: Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgmp-dev libuv1-dev libssl-dev zlib1g-dev libbrotli-dev pkg-config libpq-dev postgresql redis-server openssl
+          echo "LEAN_CC=cc" >> "$GITHUB_ENV"
+      - name: macOS dependencies
+        if: runner.os == 'macOS'
+        run: |
+          brew install zlib brotli pkgconf postgresql@17 redis openssl@3
+          echo "PKG_CONFIG_PATH=$(brew --prefix zlib)/lib/pkgconfig:$(brew --prefix openssl@3)/lib/pkgconfig" >> "$GITHUB_ENV"
+          echo "$(brew --prefix postgresql@17)/bin" >> "$GITHUB_PATH"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+      - uses: leanprover/lean-action@v1
+        with:
+          auto-config: false
+          build: false
+          test: false
+          lint: false
+      - name: Build optional packages
+        run: |
+          lake -d adapters/postgres build postgres-test postgres-example
+          lake -d adapters/redis build weave-redis-test
+          lake -d adapters/tls build weave-tls-fixture
+          lake build weave-static-fixture
+      - name: TLS static protocol acceptance
+        run: |
+          python -m pip install --require-hashes -r scripts/requirements-test.txt
+          lake env python scripts/test_static.py --tls -v
+      - name: libpq wire and bounded-pool acceptance
+        run: lake env python test/wire_fixture.py
+        working-directory: adapters/postgres
+      - name: Real disposable PostgreSQL with verified TLS
+        run: lake env python test/live_cluster.py --pg-bin "$(pg_config --bindir)" --tls --example
+        working-directory: adapters/postgres
+      - name: Real disposable Redis
+        run: python adapters/redis/test/run.py
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - name: Windows native dependencies
+        id: msys
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: mingw-w64-x86_64-gcc mingw-w64-x86_64-zlib mingw-w64-x86_64-brotli mingw-w64-x86_64-pkgconf mingw-w64-x86_64-postgresql
+      - name: Select native compiler and libraries
+        shell: pwsh
+        env:
+          MSYS2_LOCATION: ${{ steps.msys.outputs.msys2-location }}
+        run: |
+          $mingw = (Join-Path $env:MSYS2_LOCATION 'mingw64').Replace('\', '/')
+          "$mingw/bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          "PKG_CONFIG_PATH=$mingw/lib/pkgconfig" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+      - uses: leanprover/lean-action@v1
+        with:
+          auto-config: false
+          build: false
+          test: false
+          lint: false
+      - name: Build native adapters
+        run: |
+          lake -d adapters/postgres build postgres-test postgres-example
+          lake -d adapters/redis build weave-redis-test
+      - name: libpq native wire acceptance
+        run: lake env python test/wire_fixture.py
+        working-directory: adapters/postgres
+      - name: RESP codec bounds
+        run: adapters/redis/.lake/build/bin/weave-redis-test --protocol-only

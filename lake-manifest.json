@@ -1,0 +1,16 @@
+{"version": "1.3.0",
+ "packagesDir": ".lake/packages",
+ "packages":
+ [{"url": "https://github.com/isavita/lean-net.git",
+   "type": "git",
+   "subDir": null,
+   "scope": "",
+   "rev": "058d68acd742607207f558e1ac8309762f996f04",
+   "name": "«lean-net»",
+   "manifestFile": "lake-manifest.json",
+   "inputRev": "058d68acd742607207f558e1ac8309762f996f04",
+   "inherited": false,
+   "configFile": "lakefile.lean"}],
+ "name": "«lean-weave»",
+ "lakeDir": ".lake",
+ "fixedToolchain": false}

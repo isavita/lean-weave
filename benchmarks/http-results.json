@@ -1,0 +1,81 @@
+{
+  "utc": "2026-11-16T08:38:35.920507+00:00",
+  "command": "lake env .lake/test-venv/bin/python scripts/benchmark_http.py --iterations 1000 --warmup 100 --workers 1 --app pages",
+  "source_commit": "2446cc26b836db669324031c68fd8b5cd4981a51",
+  "source_dirty": true,
+  "binary": ".lake/build/bin/weave-pages",
+  "binary_sha256": "1c1d6ebc0209d3bf3c778a26d37a3282a7fdc4fc5e23e02e0ffb05e8cc763a97",
+  "lean": "Lean (version 4.35.0, arm64-apple-darwin24.6.0, commit eb6cafb7290e8bd5f2937522d8d804f58f02bafc, Release)",
+  "host": {
+    "platform": "macOS-27.2.1-arm64-arm-64bit",
+    "machine": "arm64",
+    "processor": "Apple M2",
+    "logical_cpus": 8,
+    "python": "3.11.7"
+  },
+  "client_dependencies": {
+    "h2": "4.4.1",
+    "hpack": "4.2.0",
+    "hyperframe": "6.1.0"
+  },
+  "server": {
+    "application": "pages",
+    "workers": 1,
+    "address": "127.0.0.1",
+    "port": 57689,
+    "target": "/",
+    "tls": false,
+    "tcp_nodelay": true,
+    "graceful_exit_code": 0
+  },
+  "measurement": "Single Python client and server on loopback TCP, concurrency 1 per protocol, measured sequentially HTTP/1 then HTTP/2. Includes Python HTTP/HPACK parsing, flow-control ACKs, body SHA-256 validation, loop overhead and OS scheduling. Excludes TCP/settings setup, priming and warmup. No TLS, saturation, browser, remote-network, allocation or multi-client claim.",
+  "percentiles": "Nearest-rank percentiles over per-request monotonic wall-clock nanoseconds, reported in microseconds.",
+  "samples": [
+    {
+      "protocol": "HTTP/1.1 keepalive",
+      "iterations": 1000,
+      "warmup_requests": 100,
+      "priming_requests": 1,
+      "connections": 1,
+      "concurrency": 1,
+      "status": 200,
+      "validated_responses": 1101,
+      "elapsed_seconds": 0.125239167,
+      "requests_per_second": 7984.722542908641,
+      "latency_us": {
+        "min": 113.0,
+        "p50": 122.125,
+        "p95": 147.542,
+        "p99": 162.084,
+        "max": 201.125
+      },
+      "response_bytes": 430,
+      "response_sha256": "a4c93addd4228f9584899304ea77678ddef7c716b0630b5340d418bce24d1550",
+      "measured_body_digest_chain_sha256": "2faa680e756add5b1577dd8c8d7b576e73a15c99c3934d95ba7415d875efc716",
+      "response_payload_bytes_per_second": 3433430.693450716
+    },
+    {
+      "protocol": "HTTP/2 prior knowledge, sequential streams",
+      "iterations": 1000,
+      "warmup_requests": 100,
+      "priming_requests": 1,
+      "connections": 1,
+      "concurrency": 1,
+      "status": 200,
+      "validated_responses": 1101,
+      "elapsed_seconds": 0.225792375,
+      "requests_per_second": 4428.847519762348,
+      "latency_us": {
+        "min": 202.584,
+        "p50": 221.042,
+        "p95": 238.708,
+        "p99": 325.375,
+        "max": 379.0
+      },
+      "response_bytes": 430,
+      "response_sha256": "a4c93addd4228f9584899304ea77678ddef7c716b0630b5340d418bce24d1550",
+      "measured_body_digest_chain_sha256": "2faa680e756add5b1577dd8c8d7b576e73a15c99c3934d95ba7415d875efc716",
+      "response_payload_bytes_per_second": 1904404.4334978096
+    }
+  ]
+}

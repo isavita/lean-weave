@@ -1,0 +1,77 @@
+name: LeanWeave acceptance
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native:
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - name: Linux native dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgmp-dev libuv1-dev libssl-dev zlib1g-dev libbrotli-dev pkg-config
+          echo "LEAN_CC=cc" >> "$GITHUB_ENV"
+      - name: macOS native dependencies
+        if: runner.os == 'macOS'
+        run: |
+          brew install zlib brotli pkgconf
+          echo "PKG_CONFIG_PATH=$(brew --prefix zlib)/lib/pkgconfig" >> "$GITHUB_ENV"
+      - name: Windows native dependencies
+        if: runner.os == 'Windows'
+        id: msys
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: mingw-w64-x86_64-gcc mingw-w64-x86_64-zlib mingw-w64-x86_64-brotli mingw-w64-x86_64-pkgconf
+      - name: Select Windows compiler and codec DLLs
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          MSYS2_LOCATION: ${{ steps.msys.outputs.msys2-location }}
+        run: |
+          $mingw = (Join-Path $env:MSYS2_LOCATION 'mingw64').Replace('\', '/')
+          "$mingw/bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          "PKG_CONFIG_PATH=$mingw/lib/pkgconfig" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+      - uses: leanprover/lean-action@v1
+        with:
+          auto-config: false
+          build: false
+          test: false
+          lint: false
+      - name: Build framework, CLI, examples and native acceptance
+        run: lake build LeanWeave weave weave-test weave-pages weave-forms weave-crud weave-dashboard weave-wire-fixture weave-static-fixture weave-bench
+      - name: Application contracts and compiler rejection tests
+        run: .lake/build/bin/weave-test
+      - name: Install independent HTTP/2 wire codec
+        run: python -m pip install --require-hashes -r scripts/requirements-test.txt
+      - name: Live HTTP/1 and HTTP/2 parity
+        run: lake env python scripts/test_wire.py -v
+      - name: Four live example applications
+        run: lake env python scripts/test_examples.py -v
+      - name: Native compressed static files
+        run: lake env python scripts/test_static.py -v
+      - name: CLI scaffold and rebuild/restart
+        run: lake env python scripts/test_tooling.py
+      - name: Reproducible allocation and timing sample
+        run: lake env python scripts/benchmark.py --iterations 20000 --output benchmarks/ci-results.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-${{ runner.os }}
+          path: benchmarks/ci-results.json

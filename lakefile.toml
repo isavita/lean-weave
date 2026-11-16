@@ -1,6 +1,50 @@
 name = "lean-weave"
 version = "0.1.0"
-defaultTargets = ["LeanWeave"]
+defaultTargets = ["LeanWeave", "weave", "weave-test"]
+
+[[require]]
+name = "lean-net"
+git = "https://github.com/isavita/lean-net.git"
+rev = "058d68acd742607207f558e1ac8309762f996f04"
 
 [[lean_lib]]
 name = "LeanWeave"
+
+[[lean_exe]]
+name = "weave"
+root = "Weave"
+
+[[lean_exe]]
+name = "weave-test"
+root = "LeanWeave.Test.Main"
+
+[[lean_exe]]
+name = "weave-pages"
+root = "Examples.Pages"
+
+[[lean_exe]]
+name = "weave-forms"
+root = "Examples.Forms"
+
+[[lean_exe]]
+name = "weave-crud"
+root = "Examples.Crud"
+
+[[lean_exe]]
+name = "weave-dashboard"
+root = "Examples.Dashboard"
+
+[[lean_lib]]
+name = "Examples"
+
+[[lean_exe]]
+name = "weave-bench"
+root = "benchmarks.Main"
+
+[[lean_exe]]
+name = "weave-wire-fixture"
+root = "LeanWeave.Test.WireFixture"
+
+[[lean_exe]]
+name = "weave-static-fixture"
+root = "LeanWeave.Test.StaticFixture"

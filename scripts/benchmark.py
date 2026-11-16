@@ -1,0 +1,33 @@
+#!/usr/bin/env python3
+"""Record native core timings and Lean thread-local small-allocation counts."""
+import argparse
+import json
+import os
+from pathlib import Path
+import platform
+import subprocess
+from datetime import datetime, timezone
+
+root = Path(__file__).resolve().parents[1]
+p = argparse.ArgumentParser()
+p.add_argument("--iterations", type=int, default=20000)
+p.add_argument("--output", type=Path, default=root / "benchmarks/results.json")
+a = p.parse_args()
+subprocess.run(["lake", "build", "weave-bench"], cwd=root, check=True)
+binary = root / (".lake/build/bin/weave-bench" + (".exe" if os.name == "nt" else ""))
+result = subprocess.run([str(binary), str(a.iterations)], cwd=root, text=True, capture_output=True, check=True)
+report = {
+    "utc": datetime.now(timezone.utc).isoformat(),
+    "platform": platform.platform(), "machine": platform.machine(), "processor": platform.processor(),
+    "lean": subprocess.check_output(["lean", "--version"], cwd=root, text=True).strip(),
+    "commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip(),
+    "dirty": bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=root, text=True).strip()),
+    "measurement": "Native wall time and IO.getNumHeartbeats thread-local small allocation deltas; excludes large byte buffers, native malloc, RSS, sockets and TLS. Counts include loop and IO scaffolding.",
+    "samples": [json.loads(line) for line in result.stdout.splitlines() if line.strip()],
+}
+for sample in report["samples"]:
+    sample["ns_per_iteration"] = sample["nanoseconds"] / sample["iterations"]
+    sample["small_allocations_per_iteration"] = sample["small_allocations"] / sample["iterations"]
+a.output.parent.mkdir(parents=True, exist_ok=True)
+a.output.write_text(json.dumps(report, indent=2) + "\n")
+print(json.dumps(report, indent=2))
