@@ -25,7 +25,7 @@ def run : IO Unit := do
   let claims := "{\"iss\":\"issuer\",\"aud\":\"app\",\"sub\":\"alice\",\"iat\":1000,\"exp\":2000}"
   check ((Security.Jwt.verify key policy (rawToken key header claims) 1500).isOk) "ordinary signed JWT remains valid"
   let literals := #["1e1000000000", "1e-1000000000", "-1E+1000000000",
-    String.ofList (List.replicate 129 '9')]
+    String.ofList (List.replicate 513 '9')]
   for literal in literals do
     let hostileHeader := "{\"alg\":\"HS256\",\"n\":" ++ literal ++ "}"
     let token := rawToken key hostileHeader claims
@@ -37,6 +37,11 @@ def run : IO Unit := do
     check (numericFailure (Security.Audit.verifyLine {} ("{\"sequence\":" ++ literal ++ "}"))) "audit replay rejects numeric expansion before record decoding"
   let quotedHeader := "{\"alg\":\"HS256\",\"n\":\"1e1000000000\"}"
   check ((Security.Jwt.verify key policy (rawToken key quotedHeader claims) 1500).isOk) "numeric-looking JWT string stays valid"
+  for literal in #["1.7976931348623157e308", "5e-324", "0e-1024"] do
+    let .ok canonical := Body.json ("{\"alg\":\"HS256\",\"n\":" ++ literal ++ "}").toUTF8
+      | throw (IO.userError "valid finite numeric JWT header rejected")
+    check ((Security.Jwt.verify key policy (rawToken key canonical.compress claims) 1500).isOk)
+      "canonical finite numeric JWT header remains verifiable"
   let .ok record := Security.Audit.append {} { action := "test", actor := "actor", timeUnixNano := 10 }
     | throw (IO.userError "valid audit append failed")
   check ((Security.Audit.verifyLine {} record.json.compress).isOk) "canonical audit record remains valid"

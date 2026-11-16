@@ -6,7 +6,7 @@
     "hpack": "4.2.0",
     "hyperframe": "6.1.0"
   },
-  "duration_seconds": 5.749,
+  "duration_seconds": 7.465,
   "native_dynamic_loading": true,
   "same_process_same_path_reload": true,
   "old_deferred_request_completes": true,
@@ -20,7 +20,7 @@
   "header_json_numeric_bounds": true,
   "sources_sha256": {
     "LeanWeave/Plugin/Manager.lean": "8966b15099036b9816a4d09bc7b929e9d126cd9dfd3732acbbdd2f4002363194",
-    "LeanWeave/Core/Body.lean": "525b56d7f85876cb19406d56bbb35b42fd75f91145330b4bdd9071cdc21f4b11",
+    "LeanWeave/Core/Body.lean": "92ca432535b012037f6ed9024687f0094498f9ec4f83a05b2b98e2f3c29bd4ed",
     "adapters/plugins/LeanWeavePlugins/Loader.lean": "ebdf20f16c530260b92b3ca6d0e38fe4819036bf8ac2d2e0327092df492d5ccb",
     "adapters/plugins/LeanWeavePlugins/Native.lean": "87fd8d17f1043b95d801164cc5a4e338390719aa63fb7313bb06dc5024247e0e",
     "adapters/plugins/c/plugins.c": "0cb0ee3f380466d2f3596fba9a2316636566cd2e0a94ffeb9d205c2f92704212",

@@ -39,7 +39,10 @@ private def registry (config : Postgres.Config) (queue : String) : IO Jobs.Regis
         let _ ← connection.query "INSERT INTO public.weave_job_effects(job_id,queue_name,value,label) VALUES($1,$2,$3::int,$4) ON CONFLICT(job_id) DO NOTHING"
           #[some context.jobId,some queue,some (toString payload.value),some payload.label]
       action.ensuring pool.close)
-  match Jobs.Registry.create #[definition] with | .ok r => pure r | .error e => throw (IO.userError e)
+  let numeric := Jobs.Definition.typed "number"
+    (fun (p : Float) => if p.isFinite then .ok p else .error "finite number required")
+    (fun _ _ => pure ())
+  match Jobs.Registry.create #[definition,numeric] with | .ok r => pure r | .error e => throw (IO.userError e)
 
 private def settings (queue : String) : Postgres.Jobs.Config := {
   queue,leaseMs := 300,maxJobs := if queue == "bounded-flow" then 5 else 1000,maxBytes := 16 * 1024 * 1024,maxWorkflows := 64,maxWorkflowBytes := 4 * 1024 * 1024 }
@@ -140,9 +143,9 @@ private def jsonContracts (config : Postgres.Config) (registry : Jobs.Registry)
   let job ← envelope 7 0 0
   let _ ← result (store.enqueue job) config
   -- PostgreSQL normalizes jsonb numbers before returning their text. A bounded
-  -- 129-digit coefficient tests that representation without asking PostgreSQL
+  -- 513-digit coefficient tests that representation without asking PostgreSQL
   -- or Lean to expand a huge exponent during fixture setup.
-  let coefficient := String.ofList (List.replicate 129 '9')
+  let coefficient := String.ofList (List.replicate 513 '9')
   let _ ← result (pool.query "UPDATE public.leanweave_jobs SET payload=jsonb_build_object('value',$2::jsonb) WHERE id=$1"
     #[some job.id,some coefficient]) config
   let rejected ← Jobs.run (store.claim "corrupt-json") 5000 config.retainedBytes
@@ -167,6 +170,27 @@ private def jsonContracts (config : Postgres.Config) (registry : Jobs.Registry)
     #[some id]) config
   check ((← result (Postgres.Workflows.get store "tenant-a" id) config).isSome) "valid stored workflow still decodes"
   check ((← IO.monoMsNow) - started < 5000) "stored JSON rejection and recovery complete promptly"
+  -- Finite IEEE754 values must survive typed canonicalization, PostgreSQL jsonb
+  -- formatting, and both guarded job and workflow restore paths.
+  let numericStore ← Postgres.Jobs.Store.ofPool pool registry { store.config with queue := store.config.queue ++ "-finite" }
+  result (Postgres.Workflows.install numericStore) config
+  for literal in #["1.7976931348623157e308", "5e-324", "0e-1024"] do
+    let .ok payload := Body.json literal.toUTF8 | throw (IO.userError "valid numeric fixture rejected")
+    let job : Jobs.Envelope := { id := ← Jobs.newId,kind := "number",payload,metadata := { tenant := "tenant-a" } }
+    let _ ← result (numericStore.enqueue job) config
+    let some lease ← result (numericStore.claim "finite-number") config | throw (IO.userError "numeric job was not restored")
+    check (lease.job.id == job.id && (Lean.fromJson? lease.job.payload : Except String Float).isOk)
+      "finite numeric job survives canonical storage"
+    check (← result (numericStore.settle lease .success) config) "finite numeric job settles"
+    let plan : Workflow.Plan := { name := "numeric",steps := #[{ name := "number",action := { kind := "number",payload } }] }
+    let created ← match ← Workflow.create plan registry { tenant := "tenant-a" } with
+      | .ok flow => pure flow | .error error => throw (IO.userError error)
+    let id ← result (Postgres.Workflows.enqueue numericStore created) config
+    check ((← result (Postgres.Workflows.get numericStore "tenant-a" id) config).isSome)
+      "finite numeric workflow survives canonical storage"
+    check (← result (Postgres.Workflows.cancel numericStore "tenant-a" id) config) "numeric workflow cleanup cancellation"
+    let _ ← result (Postgres.Workflows.reconcile numericStore) config
+    check (← result (Postgres.Workflows.remove numericStore "tenant-a" id) config) "numeric workflow cleanup removal"
   IO.println "PG bounded stored JSON: job/workflow numeric rejection, rollback and valid recovery passed"
 
 /-- Real native listener and dedicated PostgreSQL workers, sharing one absolute
