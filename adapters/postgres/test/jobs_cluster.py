@@ -223,7 +223,8 @@ def main():
         source_root = ROOT.parents[1]
         paths = sorted((source_root / "LeanWeave/Jobs").glob("*.lean")) + sorted((source_root / "LeanWeave/Workflow").glob("*.lean"))
         paths += [ROOT / "LeanWeavePostgres/Jobs.lean", ROOT / "LeanWeavePostgres/Workflows.lean",
-                  Path(__file__).resolve(), ROOT / "test/JobsMain.lean", source_root / "LeanWeave/Core/Body.lean"]
+                  Path(__file__).resolve(), ROOT / "test/JobsMain.lean", ROOT / "test/cluster_support.py",
+                  source_root / "LeanWeave/Core/Body.lean"]
         report = {"passed": True, "platform": platform.platform(), "postgres": version,
             "duration_seconds": round(time.monotonic() - started, 3), "local_native": args.native,
             "native_cron_timer": True, "native_sigterm_graceful": True, "native_sigterm_forced": True,

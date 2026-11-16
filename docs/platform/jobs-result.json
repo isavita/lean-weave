@@ -2,7 +2,7 @@
   "passed": true,
   "platform": "macOS-27.2.1-arm64-arm-64bit-Mach-O",
   "postgres": "PostgreSQL 17.12 (Homebrew) on aarch64-apple-darwin27.2.0, compiled by Apple clang version 21.0.0 (clang-2100.4.1.1), 64-bit",
-  "duration_seconds": 25.291,
+  "duration_seconds": 24.898,
   "local_native": true,
   "native_cron_timer": true,
   "native_sigterm_graceful": true,
@@ -32,9 +32,9 @@
     "LeanWeave/Workflow/Types.lean": "240131cdf007de0e0ff44dc6249f795fe428a2d8101a443ed9fc786cb4a23e7e",
     "adapters/postgres/LeanWeavePostgres/Jobs.lean": "7970056ac6eca5fff91d7aa02f72da8949e4acf3e91cf96f8c8f38c1d5598450",
     "adapters/postgres/LeanWeavePostgres/Workflows.lean": "08414689a0b4c5ccebeca098d9007039358e6f83745b406efd9288995f0f34b5",
-    "adapters/postgres/test/jobs_cluster.py": "29b47be7ac8c9671d7eb34b734b613cea0ec799c18b2eb02b5e4a2f20334e1dc",
+    "adapters/postgres/test/jobs_cluster.py": "3aeb01be66be82430c0281e5e914e5b14f0f29c418cf0b23232839703039c788",
     "adapters/postgres/test/JobsMain.lean": "4c3324320d5d7db5ce21f2d9fd6ad80b5dbb257914e3b7803d2315ea7b155d4b",
-    "LeanWeave/Core/Body.lean": "92ca432535b012037f6ed9024687f0094498f9ec4f83a05b2b98e2f3c29bd4ed",
-    "adapters/postgres/test/cluster_support.py": "f40e8a21848f63bcfc3797f4f0f6e8eec59c259018f31c9f627e9a9b4398e9c4"
+    "adapters/postgres/test/cluster_support.py": "f40e8a21848f63bcfc3797f4f0f6e8eec59c259018f31c9f627e9a9b4398e9c4",
+    "LeanWeave/Core/Body.lean": "92ca432535b012037f6ed9024687f0094498f9ec4f83a05b2b98e2f3c29bd4ed"
   }
 }
