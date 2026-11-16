@@ -19,6 +19,95 @@ def _bounded_tail(stream, limit):
     return (f"[last {limit} of {size} bytes]\n" if size > limit else "") + text
 
 
+def _certificate_openssl(binary_dir):
+    """Use the PostgreSQL-linked Homebrew provider, rather than Apple LibreSSL."""
+    override = os.environ.get("WEAVE_TEST_OPENSSL")
+    if override:
+        executable = shutil.which(override)
+        if executable is None:
+            raise RuntimeError("WEAVE_TEST_OPENSSL must name an available OpenSSL executable")
+        return Path(executable)
+    if sys.platform == "darwin":
+        linked = subprocess.check_output(["otool", "-L", str(binary_dir / "postgres")], text=True, timeout=10)
+        for line in linked.splitlines()[1:]:
+            library = line.strip().split(" (compatibility version", 1)[0]
+            if Path(library).name.startswith("libssl."):
+                executable = Path(library).parent.parent / "bin/openssl"
+                if executable.is_file():
+                    return executable
+        raise RuntimeError("cannot locate PostgreSQL's OpenSSL tool; set WEAVE_TEST_OPENSSL explicitly")
+    executable = shutil.which("openssl")
+    if executable is None:
+        raise RuntimeError("an OpenSSL executable is required for PostgreSQL TLS fixtures")
+    return Path(executable)
+
+
+def _certificate_diagnostics(binary_dir, data):
+    """Only public metadata: never read or print server.key."""
+    try:
+        executable = _certificate_openssl(binary_dir)
+        commands = [
+            ("certificate OpenSSL provider", [str(executable), "version", "-a"], 4096),
+            ("public certificate", [str(executable), "x509", "-in", str(data / "server.crt"),
+                "-noout", "-subject", "-issuer", "-dates", "-sha256", "-fingerprint",
+                "-ext", "subjectAltName,basicConstraints,keyUsage,extendedKeyUsage"], 8192),
+        ]
+        for label, command, limit in commands:
+            print(f"--- {label}: {executable} (bounded) ---", file=sys.stderr)
+            with tempfile.TemporaryFile() as output:
+                try:
+                    subprocess.run(command, check=True, stdout=output, stderr=output, timeout=10)
+                except (subprocess.SubprocessError, OSError) as error:
+                    print(f"diagnostic command failed: {error}", file=sys.stderr)
+                print(_bounded_tail(output, limit), file=sys.stderr)
+    except (subprocess.SubprocessError, OSError, RuntimeError) as error:
+        print(f"certificate diagnostics unavailable: {error}", file=sys.stderr)
+    sys.stderr.flush()
+
+
+def create_tls_certificate(binary_dir, data):
+    """Create one explicit extension profile, independent of global req config.
+
+    LibreSSL can append a second basicConstraints when the host req config
+    already enables v3_ca and -addext supplies it again. OpenSSL rejects that
+    certificate as invalid. Keep each extension in this fixture-only section,
+    use SHA256/RSA2048, and verify server purpose and localhost before startup.
+    """
+    executable = _certificate_openssl(binary_dir)
+    config = data / "fixture-openssl.cnf"
+    config.write_text("""[req]
+prompt = no
+distinguished_name = subject
+x509_extensions = server_certificate
+[subject]
+CN = localhost
+[server_certificate]
+subjectAltName = DNS:localhost
+basicConstraints = critical,CA:TRUE
+keyUsage = critical,digitalSignature,keyEncipherment,keyCertSign
+extendedKeyUsage = serverAuth
+subjectKeyIdentifier = hash
+""")
+    commands = [
+        [str(executable), "req", "-config", str(config), "-extensions", "server_certificate",
+            "-x509", "-newkey", "rsa:2048", "-nodes", "-sha256", "-days", "1",
+            "-keyout", str(data / "server.key"), "-out", str(data / "server.crt")],
+        [str(executable), "verify", "-purpose", "sslserver", "-verify_hostname", "localhost",
+            "-CAfile", str(data / "server.crt"), str(data / "server.crt")],
+    ]
+    for command in commands:
+        with tempfile.TemporaryFile() as output:
+            try:
+                subprocess.run(command, check=True, stdout=output, stderr=output, timeout=30)
+            except (subprocess.SubprocessError, OSError):
+                print("--- certificate fixture command failed (bounded) ---", file=sys.stderr)
+                print(_bounded_tail(output, 4096), file=sys.stderr)
+                _certificate_diagnostics(binary_dir, data)
+                raise
+    (data / "server.key").chmod(0o600)
+    _certificate_diagnostics(binary_dir, data)
+
+
 def start_postgres(binary_dir, data, log, options):
     """Start one private cluster, exposing bounded logs before temp cleanup.
 
@@ -43,6 +132,8 @@ def start_postgres(binary_dir, data, log, options):
                         print(_bounded_tail(stream, limit), file=sys.stderr)
                 except OSError as error:
                     print(f"unavailable: {error}", file=sys.stderr)
+            if (data / "server.crt").is_file():
+                _certificate_diagnostics(binary_dir, data)
             sys.stderr.flush()
             if (data / "postmaster.pid").is_file():
                 with tempfile.TemporaryFile() as cleanup:
@@ -91,11 +182,7 @@ def cluster(binary_dir=None, tls=False):
             check=True, stdout=subprocess.DEVNULL)
         options = f"-h 127.0.0.1 -p {port} -k {directory}"
         if tls:
-            subprocess.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1", "-subj", "/CN=localhost",
-                "-addext", "subjectAltName=DNS:localhost", "-addext", "basicConstraints=critical,CA:TRUE",
-                "-keyout", str(data / "server.key"), "-out", str(data / "server.crt")],
-                check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            (data / "server.key").chmod(0o600)
+            create_tls_certificate(binary_dir, data)
             options += " -c ssl=on"
         started = False
         try:

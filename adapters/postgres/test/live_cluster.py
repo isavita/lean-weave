@@ -12,7 +12,7 @@ import time
 import urllib.parse
 import urllib.request
 
-from cluster_support import start_postgres
+from cluster_support import create_tls_certificate, start_postgres
 
 
 def wait_for_database_disconnects(binary_dir, port, timeout=5):
@@ -72,12 +72,7 @@ def main():
                        check=True, stdout=subprocess.DEVNULL)
         options = f"-h 127.0.0.1 -p {port} -k {directory}"
         if args.tls:
-            subprocess.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
-                            "-subj", "/CN=localhost", "-addext", "subjectAltName=DNS:localhost",
-                            "-addext", "basicConstraints=critical,CA:TRUE",
-                            "-keyout", str(data / "server.key"), "-out", str(data / "server.crt")],
-                           check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            (data / "server.key").chmod(0o600)
+            create_tls_certificate(binary_dir, data)
             options += " -c ssl=on"
         started = False
         try:
