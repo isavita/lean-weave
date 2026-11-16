@@ -161,7 +161,14 @@ def main():
     root = Path(__file__).resolve().parents[1]
     executable = root / ".lake/build/bin" / ("weave-http-test.exe" if os.name == "nt" else "weave-http-test")
     windows_runtime = None
+    unpackaged_backend = None
     if os.name == "nt":
+        try:
+            before = subprocess.run([str(executable), "--backend-info"], capture_output=True, text=True, timeout=5)
+            unpackaged_backend = {"returncode": before.returncode, "description": before.stdout.strip(), "stderr": before.stderr.strip()}
+        except (OSError, subprocess.TimeoutExpired) as error:
+            unpackaged_backend = {"error": str(error)}
+        print("UNPACKAGED native HTTP backend: " + json.dumps(unpackaged_backend), flush=True)
         packaged = subprocess.run([sys.executable, str(root / "scripts/stage_windows_runtime.py"), str(executable)],
             check=True, text=True, capture_output=True, timeout=60)
         windows_runtime = json.loads(packaged.stdout)
@@ -223,6 +230,7 @@ def main():
                 thread.join(timeout=3)
                 assert not thread.is_alive(), "fixture listener did not stop"
     report = {"native": results, "platform": platform.platform(), "independent_h2": version("h2"), "windows_runtime": windows_runtime,
+        "unpackaged_backend": unpackaged_backend,
         "sources_sha256": {str(path.relative_to(root)): hashlib.sha256(path.read_bytes()).hexdigest()
             for path in [root / "test/Main.lean", Path(__file__).resolve(), root / "LeanWeaveHttp/Client.lean", root / "c/http.c", root / "scripts/stage_windows_runtime.py"]}}
     (root / "test/wire-result.json").write_text(json.dumps(report, indent=2) + "\n")

@@ -23,8 +23,12 @@ private def rejectedStartup (config : Http.Config) : IO Bool := do
     return false
   catch _ => return true
 
-def main : IO Unit := do
-  IO.eprintln ("HTTP_BACKEND " ++ (← backendInfo))
+def main (args : List String) : IO Unit := do
+  let backend ← backendInfo
+  IO.eprintln ("HTTP_BACKEND " ++ backend)
+  if args == ["--backend-info"] then
+    IO.println backend
+    return
   check ((Http.decodeOtlpResponse 200 "{}".toUTF8).accepted) "OTLP empty object"
   check ((Http.decodeOtlpResponse 200 "{\"partialSuccess\":{\"rejectedSpans\":\"1\"}}".toUTF8).rejected == 1) "OTLP partial success int64"
   for bad in ["null", "[]", "{\"partialSuccess\":true}", "{\"partialSuccess\":{\"rejectedSpans\":1e1000000000}}",
