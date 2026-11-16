@@ -1,0 +1,1 @@
+{"node":"v24.3.0","platform":"darwin","arch":"arm64","graphql":"17.1.0","graphqlWs":"6.4.2","ws":"8.23.0","officialIntrospection":true,"buildClientSchema":true,"assertValidSchema":true,"typedQuery":true,"typedMutation":true,"subscriptionNext":true,"clientCompleteCleanupOnce":true}
