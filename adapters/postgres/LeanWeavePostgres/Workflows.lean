@@ -12,7 +12,14 @@ private def statusName : LeanWeave.Workflow.Status → String
   | .failed => "failed" | .cancelled => "cancelled" | .compensationFailed => "compensation_failed"
 
 private def decode (text : String) : AppM LeanWeave.Workflow.Instance := do
-  match Lean.Json.parse text >>= Lean.fromJson? with
+  -- Leave bounded room for PostgreSQL's jsonb formatting; the persisted state
+  -- retains the one MiB compact limit enforced when the workflow is admitted.
+  let json ← match Body.json text.toUTF8 { maxBytes := 2 * 1024 * 1024, maxDepth := 40, maxFields := 1024 } with
+    | .ok value => pure value
+    | .error _ => throw { status := 503,message := "invalid persisted workflow state" }
+  if json.compress.utf8ByteSize > 1024 * 1024 then
+    throw { status := 503,message := "invalid persisted workflow state" }
+  match Lean.fromJson? json with
   | .ok flow => pure flow
   | .error _ => throw { status := 503,message := "invalid persisted workflow state" }
 

@@ -1,3 +1,4 @@
+import Health
 import LeanWeaveHttp.Vault
 import LeanWeaveHttp.Otlp
 import LeanWeavePostgres
@@ -75,7 +76,7 @@ private def otel : IO Unit := do
   let endpoint : Http.Endpoint := { hostName := "localhost", hostAddr := "127.0.0.1", port := port.toUInt16, secure := false }
   let tracer ← Observability.Tracer.create { serviceName := "leanweave-integration" }
   let client ← Http.Client.create { endpoint } (some tracer)
-  let exportClient ← Http.Client.create { endpoint }
+  let exportClient ← Http.Client.create { endpoint } (some tracer)
   let pgConfig ← need (← Postgres.Config.fromEnv)
   let pool ← Postgres.Pool.create pgConfig (some tracer)
   let request ← tracer.start "integration.request" (some "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01") .server
@@ -118,4 +119,8 @@ def main (arguments : List String) : IO Unit := do
   match arguments with
   | ["vault"] => vault
   | ["otel"] => otel
-  | _ => throw (IO.userError "expected vault or otel integration mode")
+  | ["health", port] =>
+    let some port := port.toNat? | throw (IO.userError "health requires a numeric HTTP port")
+    if port == 0 || port > 65535 then throw (IO.userError "health HTTP port is outside 1..65535")
+    Integration.Health.run port.toUInt16
+  | _ => throw (IO.userError "expected vault, otel, or health PORT integration mode")

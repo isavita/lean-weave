@@ -1,8 +1,8 @@
 {
   "passed": true,
-  "platform": "macOS-27.2.1-arm64-arm-64bit",
+  "platform": "macOS-27.2.1-arm64-arm-64bit-Mach-O",
   "postgres": "PostgreSQL 17.12 (Homebrew) on aarch64-apple-darwin27.2.0, compiled by Apple clang version 21.0.0 (clang-2100.4.1.1), 64-bit",
-  "duration_seconds": 25.572,
+  "duration_seconds": 24.624,
   "local_native": true,
   "native_cron_timer": true,
   "native_sigterm_graceful": true,
@@ -16,6 +16,7 @@
   "operator_compensation_retry": true,
   "workflow_cancellation": true,
   "whole_dag_capacity_reservation": true,
+  "stored_json_numeric_bounds": true,
   "persistent_service_started": false,
   "sources_sha256": {
     "LeanWeave/Jobs/Cron.lean": "21bf03a29f88ad535d9c35abfedd8e624c23d4d9ca250edc18ac2911cbc3e4dc",
@@ -29,9 +30,10 @@
     "LeanWeave/Workflow/Local.lean": "7c11afd52cbdbe9de10f47edaf4bacb73fc32a49ef0faf8da6dda100e8924fa1",
     "LeanWeave/Workflow/Test.lean": "2eaee0b35d31c317aeddf8da3bca89cb12b019b9803530d60f9b1f88c8755c65",
     "LeanWeave/Workflow/Types.lean": "240131cdf007de0e0ff44dc6249f795fe428a2d8101a443ed9fc786cb4a23e7e",
-    "adapters/postgres/LeanWeavePostgres/Jobs.lean": "4d2e37344b25c06c4ad6c73526e29da488bdbb1122d93f8779a0002d27cd2dcd",
-    "adapters/postgres/LeanWeavePostgres/Workflows.lean": "cea1bc7fac7055ccca7f5dcc89f580e8608d92a0f5b99dddf122e41b0897710c",
-    "adapters/postgres/test/jobs_cluster.py": "2f26b014beafaec7aa8709bb01667db1ed51e6ee3aada1b4e9752584f4593cdf",
-    "adapters/postgres/test/JobsMain.lean": "985e141353e8882cef108cc27f0ed6594077144bd573ecac95829cb383b61a0c"
+    "adapters/postgres/LeanWeavePostgres/Jobs.lean": "7970056ac6eca5fff91d7aa02f72da8949e4acf3e91cf96f8c8f38c1d5598450",
+    "adapters/postgres/LeanWeavePostgres/Workflows.lean": "08414689a0b4c5ccebeca098d9007039358e6f83745b406efd9288995f0f34b5",
+    "adapters/postgres/test/jobs_cluster.py": "29b47be7ac8c9671d7eb34b734b613cea0ec799c18b2eb02b5e4a2f20334e1dc",
+    "adapters/postgres/test/JobsMain.lean": "19af5a1275581427cdc2f838a77869b0ff5412a9f302cb9f6c36bac8e8a94715",
+    "LeanWeave/Core/Body.lean": "525b56d7f85876cb19406d56bbb35b42fd75f91145330b4bdd9071cdc21f4b11"
   }
 }

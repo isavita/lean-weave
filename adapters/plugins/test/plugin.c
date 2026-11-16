@@ -43,6 +43,9 @@ static int poll(void *value,void *exchange,uint64_t now,size_t budget,weave_plug
         event->headers_json=text("[[\"content-type\",\"text/plain\"],[\"x-plugin\",\"" VERSION "\"]]");
         if(strstr(r->target,"badheaders")) event->headers_json=text("[[\"content-length\",\"1\"]]");
         if(strstr(r->target,"badcontrol")) event->headers_json=text("[[\"x-test\",\"\\u0001\"]]");
+        if(strstr(r->target,"badnumber")) event->headers_json=text("[[\"x-test\",1e1000000000]]");
+        if(strstr(r->target,"badnegative")) event->headers_json=text("[[\"x-test\",1e-1000000000]]");
+        if(strstr(r->target,"numericstring")) event->headers_json=text("[[\"x-test\",\"1e1000000000\"]]");
         if(strstr(r->target,"badstatus")) event->status=101;
         if(!streaming) event->body=text(VERSION);
         if(strstr(r->target,"bytes")) { static const uint8_t binary[]={0,255,1,128};event->body.data=binary;event->body.size=sizeof(binary); }

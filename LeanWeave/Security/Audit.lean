@@ -1,4 +1,5 @@
 import LeanWeave.Security.Crypto
+import LeanWeave.Core.Body
 import Std.Sync.Mutex
 
 namespace LeanWeave.Security.Audit
@@ -69,7 +70,7 @@ changes. A trusted externally stored final checkpoint also detects truncation or
 complete chain replacement; a hash chain alone cannot detect those two attacks. -/
 def verifyLine (checkpoint : Checkpoint) (line : String) : Except String Record := do
   if line.utf8ByteSize > 32768 then throw "audit record too large"
-  let json ← Lean.Json.parse line
+  let json ← (Body.json line.toUTF8 { maxBytes := 32768, maxDepth := 8 }).mapError (·.message)
   let version : Nat ← json.getObjValAs? _ "v"
   let sequence : Nat ← json.getObjValAs? _ "sequence"
   let previousHash : String ← json.getObjValAs? _ "previousHash"

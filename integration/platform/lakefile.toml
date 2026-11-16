@@ -13,3 +13,6 @@ path = "../../adapters/postgres"
 [[lean_exe]]
 name = "platform-integration"
 root = "Main"
+
+[[lean_lib]]
+name = "Health"

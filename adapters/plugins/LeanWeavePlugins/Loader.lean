@@ -1,4 +1,5 @@
 import LeanWeavePlugins.Native
+import LeanWeave.Core.Body
 
 namespace LeanWeave.Plugins
 
@@ -41,8 +42,7 @@ private def reasonCode : Stream.CancelReason → UInt32
 
 private def headers (bytes : ByteArray) (config : Config) : Except AppError (Array LeanNet.HTTP1.Header) := do
   let fail := fun (_ : String) => ({ status := 502,message := "invalid native plugin headers" } : AppError)
-  let some source := String.fromUTF8? bytes | throw (fail "")
-  let json ← (Lean.Json.parse source).mapError fail
+  let json ← (Body.json bytes { maxBytes := config.maxHeaderBytes, maxDepth := 2, maxFields := config.maxHeaderCount + 2 }).mapError fun _ => fail ""
   let pairs ← (Lean.fromJson? json : Except String (Array (String × String))).mapError fail
   if pairs.size > config.maxHeaderCount then throw (fail "")
   for (name,value) in pairs do

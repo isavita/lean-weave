@@ -1,4 +1,5 @@
 import LeanWeave.Security.Crypto
+import LeanWeave.Core.Body
 
 namespace LeanWeave.Security.Jwt
 
@@ -21,7 +22,7 @@ private def objectKeys (json : Lean.Json) : Except String (Array String) :=
   | .obj fields => .ok (fields.toArray.map Prod.fst)
   | _ => .error "expected JSON object"
 
-private def uniqueObject (text : String) : Except String Lean.Json := do
+private def uniqueObject (text : String) (maxBytes : Nat) : Except String Lean.Json := do
   -- Json.parse canonicalizes objects. Inspect keys before duplicates disappear.
   let bytes := text.toUTF8
   let mut seen : Array String := #[]
@@ -38,6 +39,7 @@ private def uniqueObject (text : String) : Except String Lean.Json := do
       else if b == 34 then
         inString := false
         if depth == 1 && keyExpected then
+          -- This slice is exactly one quoted string, never a numeric token.
           let keyJson ← Lean.Json.parse (String.fromUTF8! (bytes.extract stringStart (i+1)))
           let name ← keyJson.getStr?
           if seen.contains name then throw "duplicate JWT claim"
@@ -52,7 +54,7 @@ private def uniqueObject (text : String) : Except String Lean.Json := do
       if depth == 1 then keyExpected := true
     else if b == 125 || b == 93 then depth := depth - 1
     else if b == 44 && depth == 1 then keyExpected := true
-  let json ← Lean.Json.parse text
+  let json ← (Body.json bytes { maxBytes, maxDepth := 16 }).mapError (·.message)
   let keys ← objectKeys json
   if keys.size != keys.toList.eraseDups.length then throw "duplicate JWT claim"
   return json
@@ -60,7 +62,7 @@ private def uniqueObject (text : String) : Except String Lean.Json := do
 private def decodeJson (part : String) (max : Nat) : Except String Lean.Json := do
   let bytes ← Crypto.unbase64url part max
   let some text := String.fromUTF8? bytes | throw "JWT JSON must be UTF-8"
-  uniqueObject text
+  uniqueObject text max
 
 private def sameBytes (a b : ByteArray) : Bool := Id.run do
   if a.size != b.size then return false

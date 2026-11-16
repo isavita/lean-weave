@@ -121,6 +121,13 @@ def main():
                 assert request("/bytes")[2] == bytes([0, 255, 1, 128])
                 assert request("/badheaders")[0] == 502
                 assert request("/badcontrol")[0] == 502
+                for path in ["/badnumber", "/badnegative"]:
+                    rejected_at = time.monotonic()
+                    assert request(path)[0] == 502
+                    assert time.monotonic() - rejected_at < 2, "unbounded plugin JSON number parsing"
+                assert request("/numericstring")[1].get("x-test") == "1e1000000000"
+                assert request()[2] == b"v3", "numeric rejection must release plugin exchange and keep serving"
+                print("PASS native plugin JSON numeric bounds: huge positive/negative exponent rejected, string control and recovery", flush=True)
                 assert request("/badstatus")[0] == 502
                 assert request("/badbody")[0] == 502
                 assert request("/failpoll")[0] == 502
@@ -190,7 +197,7 @@ def main():
                 if process.poll() is None:
                     process.kill(); process.wait(timeout=5)
     if options.output:
-        paths = [SOURCE / "LeanWeave/Plugin/Manager.lean", *sorted((ROOT / "LeanWeavePlugins").glob("*.lean")),
+        paths = [SOURCE / "LeanWeave/Plugin/Manager.lean", SOURCE / "LeanWeave/Core/Body.lean", *sorted((ROOT / "LeanWeavePlugins").glob("*.lean")),
                  ROOT / "c/plugins.c", ROOT / "include/leanweave_plugin.h", ROOT / "test/plugin.c",
                  ROOT / "test/Fixture.lean", Path(__file__).resolve()]
         options.output.parent.mkdir(parents=True, exist_ok=True)
@@ -200,6 +207,7 @@ def main():
             "same_process_same_path_reload": True,"old_deferred_request_completes": True,"stream_lease_until_close": True,
             "generation_bound": 2,"in_flight_bound": 2,"failed_reload_preserves_active": True,"http2_reset_unloads": True,
             "head_closes_stream": True,"sigterm_stream_shutdown": True,
+            "header_json_numeric_bounds": True,
             "sources_sha256": {str(p.relative_to(SOURCE)): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}},indent=2)+"\n")
 
 

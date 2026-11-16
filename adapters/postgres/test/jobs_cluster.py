@@ -106,6 +106,7 @@ def main():
             return output.stdout.strip()
 
         print(call("contracts", "contracts"), flush=True)
+        print(call("json-contracts", "json-bounds"), flush=True)
         lifecycle(pg, environment, call, "signal-graceful", 2000, 100, False)
         lifecycle(pg, environment, call, "signal-forced", 150, 1500, True)
         reserved_flow = call("workflow-seed", "bounded-flow", "saga", 0)
@@ -222,7 +223,7 @@ def main():
         source_root = ROOT.parents[1]
         paths = sorted((source_root / "LeanWeave/Jobs").glob("*.lean")) + sorted((source_root / "LeanWeave/Workflow").glob("*.lean"))
         paths += [ROOT / "LeanWeavePostgres/Jobs.lean", ROOT / "LeanWeavePostgres/Workflows.lean",
-                  Path(__file__).resolve(), ROOT / "test/JobsMain.lean"]
+                  Path(__file__).resolve(), ROOT / "test/JobsMain.lean", source_root / "LeanWeave/Core/Body.lean"]
         report = {"passed": True, "platform": platform.platform(), "postgres": version,
             "duration_seconds": round(time.monotonic() - started, 3), "local_native": args.native,
             "native_cron_timer": True, "native_sigterm_graceful": True, "native_sigterm_forced": True,
@@ -230,6 +231,7 @@ def main():
             "worker_crash_lease_recovery": True, "ack_crash_workflow_outbox_replay": True,
             "transactional_enqueue": True, "saga_compensation": True, "operator_compensation_retry": True,
             "workflow_cancellation": True, "whole_dag_capacity_reservation": True,
+            "stored_json_numeric_bounds": True,
             "persistent_service_started": False,
             "sources_sha256": {str(p.relative_to(source_root)): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}}
         args.output.parent.mkdir(parents=True, exist_ok=True)

@@ -134,6 +134,41 @@ private def workflowContracts (config : Postgres.Config) (registry : Jobs.Regist
   check (counters.rows == #[#[some "0"]]) "workflow job budget cleanup atomic"
   IO.println "PG workflow transactional outbox/idempotency/tenant/cancel/retention checks passed"
 
+private def jsonContracts (config : Postgres.Config) (registry : Jobs.Registry)
+    (pool : Postgres.Pool) (store : Postgres.Jobs.Store) : IO Unit := do
+  let started ← IO.monoMsNow
+  let job ← envelope 7 0 0
+  let _ ← result (store.enqueue job) config
+  -- PostgreSQL normalizes jsonb numbers before returning their text. A bounded
+  -- 129-digit coefficient tests that representation without asking PostgreSQL
+  -- or Lean to expand a huge exponent during fixture setup.
+  let coefficient := String.ofList (List.replicate 129 '9')
+  let _ ← result (pool.query "UPDATE public.leanweave_jobs SET payload=jsonb_build_object('value',$2::jsonb) WHERE id=$1"
+    #[some job.id,some coefficient]) config
+  let rejected ← Jobs.run (store.claim "corrupt-json") 5000 config.retainedBytes
+  check (match rejected with | .error e => e.status == 503 && e.message == "invalid stored job payload" | _ => false)
+    "stored job numeric allocation guard preserves adapter error"
+  check ((← result (store.state "tenant-a" job.id) config) == some "queued") "invalid payload claim rolls back its lease"
+  let _ ← result (pool.query "UPDATE public.leanweave_jobs SET payload=$2::jsonb WHERE id=$1"
+    #[some job.id,some job.payload.compress]) config
+  let exact := { store with config := { store.config with maxPayloadBytes := job.payload.compress.utf8ByteSize } }
+  let some lease ← result (exact.claim "valid-json") config | throw (IO.userError "restored job was not claimable")
+  check (lease.job.id == job.id && (← result (store.settle lease .success) config)) "valid stored payload still decodes"
+  let created ← flow registry "success"
+  let id ← result (Postgres.Workflows.enqueue store created) config
+  let _ ← result (pool.query "UPDATE public.leanweave_workflows SET snapshot=jsonb_set(snapshot,'{revision}',$2::jsonb) WHERE id=$1"
+    #[some id,some coefficient]) config
+  let corruptRead ← Jobs.run (Postgres.Workflows.get store "tenant-a" id) 5000 config.retainedBytes
+  check (match corruptRead with | .error e => e.status == 503 && e.message == "invalid persisted workflow state" | _ => false)
+    "stored workflow numeric allocation guard preserves adapter error"
+  check (!(← Jobs.run (Postgres.Workflows.cancel store "tenant-a" id) 5000 config.retainedBytes).isOk)
+    "workflow transition uses guarded snapshot parser"
+  let _ ← result (pool.query "UPDATE public.leanweave_workflows SET snapshot=jsonb_set(snapshot,'{revision}','1'::jsonb) WHERE id=$1"
+    #[some id]) config
+  check ((← result (Postgres.Workflows.get store "tenant-a" id) config).isSome) "valid stored workflow still decodes"
+  check ((← IO.monoMsNow) - started < 5000) "stored JSON rejection and recovery complete promptly"
+  IO.println "PG bounded stored JSON: job/workflow numeric rejection, rollback and valid recovery passed"
+
 /-- Real native listener and dedicated PostgreSQL workers, sharing one absolute
 SIGTERM cutoff. The native libpq owner guard checks every query and close. -/
 private def lifecycle (config : Postgres.Config) (registry : Jobs.Registry)
@@ -214,6 +249,7 @@ def main (args : List String) : IO Unit := do
     let store ← Postgres.Jobs.Store.ofPool pool registry (JobAcceptance.settings queue)
     JobAcceptance.bootstrap pool store config
     if mode == "contracts" then JobAcceptance.contracts config pool store
+    else if mode == "json-contracts" then JobAcceptance.jsonContracts config registry pool store
     else if mode == "workflow-contracts" then JobAcceptance.workflowContracts config registry pool store
     else if mode == "workflow-seed" then
       let some delay := b.toNat? | throw (IO.userError "bad delay")

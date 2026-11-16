@@ -1,6 +1,7 @@
 import LeanWeavePostgres.Pool
 import LeanWeave.Jobs.Worker
 import LeanWeave.Workflow.Types
+import LeanWeave.Core.Body
 
 namespace LeanWeave.Postgres.Jobs
 
@@ -104,8 +105,14 @@ def Store.enqueue (store : Store) (job : LeanWeave.Jobs.Envelope) : AppM String 
 
 private def columns : String := "job.id,kind,payload::text,tenant,request_id,traceparent,idempotency_key,(extract(epoch FROM available_at)*1000)::bigint::text,timeout_ms::text,max_attempts::text,initial_delay_ms::text,max_delay_ms::text,jitter::text,attempt::text,lease_owner,lease_token"
 
-private def decodeLease (row : Row) : AppM LeanWeave.Jobs.Lease := do
-  let payload ← match Lean.Json.parse (← col row 2) with | .ok p => pure p | .error _ => throw { status := 503,message := "invalid stored job payload" }
+private def decodeLease (row : Row) (maxPayloadBytes : Nat) : AppM LeanWeave.Jobs.Lease := do
+  -- jsonb::text inserts spaces after separators. Bound that representation,
+  -- then enforce the same compact payload budget used by enqueue validation.
+  let payload ← match Body.json (← col row 2).toUTF8 { maxBytes := 2 * maxPayloadBytes } with
+    | .ok p => pure p
+    | .error _ => throw { status := 503,message := "invalid stored job payload" }
+  if payload.compress.utf8ByteSize > maxPayloadBytes then
+    throw { status := 503,message := "invalid stored job payload" }
   let job : LeanWeave.Jobs.Envelope := {
     id := ← col row 0
     kind := ← col row 1
@@ -129,7 +136,7 @@ def Store.claim (store : Store) (owner : String) : AppM (Option LeanWeave.Jobs.L
     let _ ← c.query "WITH expired AS (SELECT id FROM public.leanweave_jobs WHERE queue_name=$1 AND state='running' AND leased_until<=clock_timestamp() AND (cancel_requested OR attempt>=max_attempts) FOR UPDATE SKIP LOCKED LIMIT 64) UPDATE public.leanweave_jobs AS job SET state=CASE WHEN job.cancel_requested THEN 'cancelled' ELSE 'dead' END,last_code='lease_expired',lease_owner=NULL,lease_token=NULL,leased_until=NULL,updated_at=clock_timestamp() FROM expired WHERE job.id=expired.id" #[some store.config.queue]
     let result ← c.query ("WITH picked AS (SELECT id FROM public.leanweave_jobs WHERE queue_name=$1 AND ((state IN ('queued','retrying') AND available_at<=clock_timestamp()) OR (state='running' AND leased_until<=clock_timestamp())) AND NOT cancel_requested ORDER BY available_at,id FOR UPDATE SKIP LOCKED LIMIT 1) UPDATE public.leanweave_jobs AS job SET state='running',attempt=job.attempt+1,lease_owner=$2,lease_token=$3,leased_until=clock_timestamp()+$4::bigint*interval '1 millisecond',updated_at=clock_timestamp() FROM picked WHERE job.id=picked.id RETURNING " ++ columns)
       #[some store.config.queue,some owner,some token,some (toString store.config.leaseMs)]
-    match result.rows[0]? with | none => pure none | some row => return some (← decodeLease row)
+    match result.rows[0]? with | none => pure none | some row => return some (← decodeLease row store.config.maxPayloadBytes)
 
 def Store.renew (store : Store) (claim : LeanWeave.Jobs.Lease) : AppM LeanWeave.Jobs.LeaseStatus := do
   let result ← store.pool.query "UPDATE public.leanweave_jobs SET leased_until=clock_timestamp()+$5::bigint*interval '1 millisecond' WHERE id=$1 AND queue_name=$2 AND state='running' AND lease_owner=$3 AND lease_token=$4 AND leased_until>clock_timestamp() RETURNING cancel_requested"
