@@ -114,6 +114,8 @@ jobs:
           node test/graphql-client/acceptance.mjs
       - name: Typed protocol compiler rejection checks
         run: lake env python scripts/test_protocol_compile.py
+      - name: Protocol fixture process lifecycle
+        run: lake env python scripts/test_protocol_launcher.py -v
       - name: Official gRPC and gRPC-Web HTTP1/HTTP2 interoperability
         run: lake env python scripts/test_protocols.py --report docs/platform/evidence/protocols-ci.json
       - name: Platform allocation sample
