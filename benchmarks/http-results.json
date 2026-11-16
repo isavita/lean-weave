@@ -1,17 +1,17 @@
 {
-  "utc": "2026-11-16T08:40:56.859936+00:00",
-  "command": "lake env .lake/test-venv/bin/python scripts/benchmark_http.py --iterations 1000 --warmup 100 --workers 1 --app pages",
-  "source_commit": "c584fdb28759f28520ec14d01fbe9bb518e6a5f1",
-  "source_dirty": false,
+  "utc": "2026-11-16T18:42:20.561946+00:00",
+  "command": "lake env /private/tmp/leanweave-http-venv/bin/python scripts/benchmark_http.py --iterations 1000 --warmup 100 --workers 1 --app pages",
+  "source_commit": "7ec25a11f6393816a8d4bc559dabc1ed030bf51a",
+  "source_dirty": true,
   "binary": ".lake/build/bin/weave-pages",
-  "binary_sha256": "1c1d6ebc0209d3bf3c778a26d37a3282a7fdc4fc5e23e02e0ffb05e8cc763a97",
+  "binary_sha256": "10554a7b3678baa677db6c6fa7de30f64039e03d336c51d11592b8b5f48bea7d",
   "lean": "Lean (version 4.35.0, arm64-apple-darwin24.6.0, commit eb6cafb7290e8bd5f2937522d8d804f58f02bafc, Release)",
   "host": {
-    "platform": "macOS-27.2.1-arm64-arm-64bit",
+    "platform": "macOS-27.2.1-arm64-arm-64bit-Mach-O",
     "machine": "arm64",
     "processor": "Apple M2",
     "logical_cpus": 8,
-    "python": "3.11.7"
+    "python": "3.14.7"
   },
   "client_dependencies": {
     "h2": "4.4.1",
@@ -22,7 +22,7 @@
     "application": "pages",
     "workers": 1,
     "address": "127.0.0.1",
-    "port": 57861,
+    "port": 57903,
     "target": "/",
     "tls": false,
     "tcp_nodelay": true,
@@ -40,19 +40,19 @@
       "concurrency": 1,
       "status": 200,
       "validated_responses": 1101,
-      "elapsed_seconds": 0.118725416,
-      "requests_per_second": 8422.796345476692,
+      "elapsed_seconds": 0.127197,
+      "requests_per_second": 7861.820640423909,
       "latency_us": {
-        "min": 112.042,
-        "p50": 116.375,
-        "p95": 132.084,
-        "p99": 142.917,
-        "max": 190.959
+        "min": 114.459,
+        "p50": 122.041,
+        "p95": 151.708,
+        "p99": 171.917,
+        "max": 317.208
       },
       "response_bytes": 430,
       "response_sha256": "a4c93addd4228f9584899304ea77678ddef7c716b0630b5340d418bce24d1550",
       "measured_body_digest_chain_sha256": "2faa680e756add5b1577dd8c8d7b576e73a15c99c3934d95ba7415d875efc716",
-      "response_payload_bytes_per_second": 3621802.4285549778
+      "response_payload_bytes_per_second": 3380582.875382281
     },
     {
       "protocol": "HTTP/2 prior knowledge, sequential streams",
@@ -63,19 +63,19 @@
       "concurrency": 1,
       "status": 200,
       "validated_responses": 1101,
-      "elapsed_seconds": 0.216317708,
-      "requests_per_second": 4622.830045887875,
+      "elapsed_seconds": 0.223280958,
+      "requests_per_second": 4478.662260128784,
       "latency_us": {
-        "min": 201.708,
-        "p50": 211.833,
-        "p95": 229.458,
-        "p99": 307.667,
-        "max": 329.792
+        "min": 201.292,
+        "p50": 214.333,
+        "p95": 259.042,
+        "p99": 313.958,
+        "max": 790.041
       },
       "response_bytes": 430,
       "response_sha256": "a4c93addd4228f9584899304ea77678ddef7c716b0630b5340d418bce24d1550",
       "measured_body_digest_chain_sha256": "2faa680e756add5b1577dd8c8d7b576e73a15c99c3934d95ba7415d875efc716",
-      "response_payload_bytes_per_second": 1987816.9197317865
+      "response_payload_bytes_per_second": 1925824.771855377
     }
   ]
 }

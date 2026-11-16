@@ -1,5 +1,5 @@
 {
-  "scope": "Requirement-scoped local acceptance for all 27 items in the original advanced application-platform checklist. Existing core/cache support is retained. locally_verified records implementation and the linked local evidence within each explicit supported profile; it does not mean final framework CI or API documentation publication has completed.",
+  "scope": "Requirement-scoped acceptance for all 27 items in the original advanced application-platform checklist. Existing core/cache support is retained. Implementation, current local receipts and the immutable framework/native CI runs below are verified within each explicit supported profile. API documentation deployment and public new-module pages are verified at the merged implementation revision.",
   "source_attachment": "96dc41fa-ca69-48d3-85c2-d883496eaafd/pasted-text-1.txt",
   "items": [
     {
@@ -8,7 +8,7 @@
       "feature": "Channel & PubSub Abstraction",
       "requirement": "A subscription model layered over WebSockets and SSE. Implement local and distributed adapters (e.g., Redis or Erlang-style PG2) for broadcasting messages across nodes.",
       "owner": "realtime",
-      "status": "locally_verified",
+      "status": "verified",
       "implementation": [
         "LeanWeave/Realtime/PubSub.lean",
         "LeanWeave/Realtime/Channel.lean",
@@ -24,8 +24,12 @@
       "scope_and_limits": "Common typed Channel.broadcast now selects local or Redis Publisher. Real two-process WS and SSE delivery is observed; Publication is queue admission, never a remote delivery acknowledgement. Redis transport is ephemeral/at-most-once and deployment namespace/auth boundaries remain explicit.",
       "verification": {
         "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
-        "platform_ci": "pending",
-        "api_docs_publication": "pending"
+        "platform_ci": "verified",
+        "api_docs_publication": "verified",
+        "tested_head": "7ec25a11f6393816a8d4bc559dabc1ed030bf51a",
+        "merged_head": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5",
+        "platform_ci_run": 43929923700,
+        "published_revision": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5"
       }
     },
     {
@@ -34,7 +38,7 @@
       "feature": "Presence Tracking",
       "requirement": "A CRDT-backed (Conflict-free Replicated Data Type) mechanism to track which users are online or connected to a given topic across a cluster, updating in real-time as users join or disconnect.",
       "owner": "realtime",
-      "status": "locally_verified",
+      "status": "verified",
       "implementation": [
         "LeanWeave/Presence.lean"
       ],
@@ -48,8 +52,12 @@
       "scope_and_limits": "Dotted observed-remove state and periodic anti-entropy, per-connection membership, partition expiry/rejoin and stale-leave non-resurrection are exercised. Actor IDs must be incarnation-unique; causal history is finite and rejects overflow rather than forgetting tombstones.",
       "verification": {
         "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
-        "platform_ci": "pending",
-        "api_docs_publication": "pending"
+        "platform_ci": "verified",
+        "api_docs_publication": "verified",
+        "tested_head": "7ec25a11f6393816a8d4bc559dabc1ed030bf51a",
+        "merged_head": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5",
+        "platform_ci_run": 43929923700,
+        "published_revision": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5"
       }
     },
     {
@@ -58,7 +66,7 @@
       "feature": "LiveView-style Interactive Components",
       "requirement": "Server-rendered, stateful components that send HTML diffs over WebSockets (or SSE with fallback), eliminating the need for heavy frontend state management.",
       "owner": "realtime",
-      "status": "locally_verified",
+      "status": "verified",
       "implementation": [
         "LeanWeave/Live.lean",
         "LeanWeave/Live/Client.lean"
@@ -76,8 +84,12 @@
       "scope_and_limits": "Typed server state and keyed HTML patches use independent view IDs bound to one stable HttpOnly browser-owner cookie. Real same-context tabs retain independent WebSocket state, and SSE fallback does not replace another view. Owner-wide revocation, per-owner/global capacity and CSRF/origin checks are exercised. State stays on its reactor owner; transparent cross-worker/node state migration is not implemented.",
       "verification": {
         "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
-        "platform_ci": "pending",
-        "api_docs_publication": "pending"
+        "platform_ci": "verified",
+        "api_docs_publication": "verified",
+        "tested_head": "7ec25a11f6393816a8d4bc559dabc1ed030bf51a",
+        "merged_head": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5",
+        "platform_ci_run": 43929923700,
+        "published_revision": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5"
       }
     },
     {
@@ -86,7 +98,7 @@
       "feature": "Streaming & Multipart Responses",
       "requirement": "Native support for `Transfer-Encoding: chunked` (already in lean-net) exposed via an async generator/stream API for LLM token streaming or large file exports.",
       "owner": "realtime",
-      "status": "locally_verified",
+      "status": "verified",
       "implementation": [
         "LeanWeave/Core/Stream.lean",
         "LeanWeave/Stream.lean",
@@ -105,8 +117,12 @@
       "scope_and_limits": "Stream.unfoldM runs typed State → budget → AppM transitions with at most one execution and fixed state/operation/chunk reservations. No step starts at zero output credit; an admitted await still progresses and enforces its deadlines at zero credit, retaining at most one bounded chunk. Cancellation, failures, terminal trailers and HEAD-without-production close exactly once. Multipart header bytes are checked before concatenation. Native HTTP1 chunking/order and independent HTTP2 flow-controlled completion are exercised; callbacks and owned buffers remain on the worker. User callbacks must be nonblocking and stateBytes must conservatively include retained closure state.",
       "verification": {
         "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
-        "platform_ci": "pending",
-        "api_docs_publication": "pending"
+        "platform_ci": "verified",
+        "api_docs_publication": "verified",
+        "tested_head": "7ec25a11f6393816a8d4bc559dabc1ed030bf51a",
+        "merged_head": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5",
+        "platform_ci_run": 43929923700,
+        "published_revision": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5"
       }
     },
     {
@@ -115,7 +131,7 @@
       "feature": "Job Queues & Workers",
       "requirement": "A native job system (sync, in-memory, or DB-backed) with typed payloads, retries with exponential backoff, and dead-letter queues.",
       "owner": "jobs",
-      "status": "locally_verified",
+      "status": "verified",
       "implementation": [
         "LeanWeave/Jobs/Types.lean",
         "LeanWeave/Jobs/Local.lean",
@@ -132,8 +148,12 @@
       "scope_and_limits": "Sync, bounded dedicated workers, typed payloads, retries/backoff/dead letters, fencing and real multiprocess crash recovery exist. At-least-once effects require idempotency or application DB transactions. Local memory queue durability is not claimed.",
       "verification": {
         "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
-        "platform_ci": "pending",
-        "api_docs_publication": "pending"
+        "platform_ci": "verified",
+        "api_docs_publication": "verified",
+        "tested_head": "7ec25a11f6393816a8d4bc559dabc1ed030bf51a",
+        "merged_head": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5",
+        "platform_ci_run": 43929923700,
+        "published_revision": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5"
       }
     },
     {
@@ -142,7 +162,7 @@
       "feature": "Cron Scheduling",
       "requirement": "A declarative DSL for scheduling periodic tasks (e.g., `@cron \"0 * * * *\"`) that hooks into the reactor's timer wheel.",
       "owner": "jobs",
-      "status": "locally_verified",
+      "status": "verified",
       "implementation": [
         "LeanWeave/Jobs/Cron.lean",
         "LeanWeave/Jobs/Lifecycle.lean"
@@ -157,8 +177,12 @@
       "scope_and_limits": "cron! is elaboration-checked, UTC, bounded catch-up/backpressure. Scheduler.application hooks into native onTick maintenance and real timer dispatch is tested. It uses a native timer pulse with nextDue, not a separate unbounded timer task per schedule.",
       "verification": {
         "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
-        "platform_ci": "pending",
-        "api_docs_publication": "pending"
+        "platform_ci": "verified",
+        "api_docs_publication": "verified",
+        "tested_head": "7ec25a11f6393816a8d4bc559dabc1ed030bf51a",
+        "merged_head": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5",
+        "platform_ci_run": 43929923700,
+        "published_revision": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5"
       }
     },
     {
@@ -167,7 +191,7 @@
       "feature": "Workflow Engine",
       "requirement": "State machines for multi-step background processes (e.g., payment processing, user onboarding), with compensation logic for failures.",
       "owner": "jobs",
-      "status": "locally_verified",
+      "status": "verified",
       "implementation": [
         "LeanWeave/Workflow/Types.lean",
         "LeanWeave/Workflow/Local.lean",
@@ -183,8 +207,12 @@
       "scope_and_limits": "Bounded validated DAG, persistent state transitions, reverse-topological saga compensation, cancellation and explicit failed-compensation retry exist. Whole-DAG capacity reservations prevent later steps/compensations from deadlocking behind full admission.",
       "verification": {
         "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
-        "platform_ci": "pending",
-        "api_docs_publication": "pending"
+        "platform_ci": "verified",
+        "api_docs_publication": "verified",
+        "tested_head": "7ec25a11f6393816a8d4bc559dabc1ed030bf51a",
+        "merged_head": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5",
+        "platform_ci_run": 43929923700,
+        "published_revision": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5"
       }
     },
     {
@@ -193,7 +221,7 @@
       "feature": "Transactional Outbox",
       "requirement": "A pattern to ensure database writes and job publishing happen atomically, preventing dual-write anomalies.",
       "owner": "jobs",
-      "status": "locally_verified",
+      "status": "verified",
       "implementation": [
         "adapters/postgres/LeanWeavePostgres/Jobs.lean",
         "adapters/postgres/LeanWeavePostgres/Workflows.lean"
@@ -207,8 +235,12 @@
       "scope_and_limits": "Actual business write plus enqueueOn share one transaction; rollback/commit tested. A terminal-job trigger records transition events in the ACK transaction; a process killed after ACK recovers dependent publishing from the durable outbox.",
       "verification": {
         "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
-        "platform_ci": "pending",
-        "api_docs_publication": "pending"
+        "platform_ci": "verified",
+        "api_docs_publication": "verified",
+        "tested_head": "7ec25a11f6393816a8d4bc559dabc1ed030bf51a",
+        "merged_head": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5",
+        "platform_ci_run": 43929923700,
+        "published_revision": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5"
       }
     },
     {
@@ -217,7 +249,7 @@
       "feature": "Tenant Resolution Middleware",
       "requirement": "Extract the tenant from subdomain, path, JWT claim, or header, and thread it through the `Context` transparently.",
       "owner": "root",
-      "status": "locally_verified",
+      "status": "verified",
       "implementation": [
         "LeanWeave/Tenant/Basic.lean",
         "LeanWeave/Tenant/Jwt.lean",
@@ -233,8 +265,12 @@
       "scope_and_limits": "Header/path/subdomain/verified JWT sources feed Context; agreement and explicit authorization are required. JWT profile is HS256 with issuer/audience/expiry checks, not arbitrary unverified claim extraction.",
       "verification": {
         "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
-        "platform_ci": "pending",
-        "api_docs_publication": "pending"
+        "platform_ci": "verified",
+        "api_docs_publication": "verified",
+        "tested_head": "7ec25a11f6393816a8d4bc559dabc1ed030bf51a",
+        "merged_head": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5",
+        "platform_ci_run": 43929923700,
+        "published_revision": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5"
       }
     },
     {
@@ -243,7 +279,7 @@
       "feature": "Row-Level Security (RLS) Hooks",
       "requirement": "Automatic injection of `tenant_id` into SQL queries or a proof-based guarantee that a request cannot query data outside its tenant.",
       "owner": "root",
-      "status": "locally_verified",
+      "status": "verified",
       "implementation": [
         "LeanWeave/Tenant/Sql.lean",
         "adapters/postgres/LeanWeavePostgres/Tenant.lean",
@@ -259,8 +295,12 @@
       "scope_and_limits": "Private tenant-indexed commands inject predicates/insert columns. Scoped transactions use SET LOCAL plus real restrictive FORCE RLS under a non-superuser without BYPASSRLS. Escape/reborrow and same-physical-connection reset are tested. General raw Pool.query remains an explicitly trusted lower-level API.",
       "verification": {
         "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
-        "platform_ci": "pending",
-        "api_docs_publication": "pending"
+        "platform_ci": "verified",
+        "api_docs_publication": "verified",
+        "tested_head": "7ec25a11f6393816a8d4bc559dabc1ed030bf51a",
+        "merged_head": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5",
+        "platform_ci_run": 43929923700,
+        "published_revision": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5"
       }
     },
     {
@@ -269,7 +309,7 @@
       "feature": "Per-Tenant Configuration",
       "requirement": "Override feature flags, rate limits, cache rules, and branding dynamically per tenant without code changes.",
       "owner": "root",
-      "status": "locally_verified",
+      "status": "verified",
       "implementation": [
         "LeanWeave/Tenant/Config.lean",
         "LeanWeave/Tenant/Brand.lean",
@@ -287,8 +327,12 @@
       "scope_and_limits": "Runtime snapshots drive flags/rates/cache/branding without rebuilding pipelines. Revision watermark and canonical fingerprint now prevent remove/recreate and restart stale reuse. Store is process-shared; distributed configuration propagation is not implicit.",
       "verification": {
         "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
-        "platform_ci": "pending",
-        "api_docs_publication": "pending"
+        "platform_ci": "verified",
+        "api_docs_publication": "verified",
+        "tested_head": "7ec25a11f6393816a8d4bc559dabc1ed030bf51a",
+        "merged_head": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5",
+        "platform_ci_run": 43929923700,
+        "published_revision": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5"
       }
     },
     {
@@ -297,7 +341,7 @@
       "feature": "Deterministic Percentage Rollouts",
       "requirement": "Sticky bucketing based on user ID or session ID, ensuring a user sees the same variant across requests.",
       "owner": "root",
-      "status": "locally_verified",
+      "status": "verified",
       "implementation": [
         "LeanWeave/Feature/Basic.lean"
       ],
@@ -310,8 +354,12 @@
       "scope_and_limits": "SHA256 length-delimited bucketing uses authenticated principal, verified session/subject or an explicitly documented anonymous tenant cohort. It is deterministic and sticky, not a claim that anonymous identity exists without a session.",
       "verification": {
         "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
-        "platform_ci": "pending",
-        "api_docs_publication": "pending"
+        "platform_ci": "verified",
+        "api_docs_publication": "verified",
+        "tested_head": "7ec25a11f6393816a8d4bc559dabc1ed030bf51a",
+        "merged_head": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5",
+        "platform_ci_run": 43929923700,
+        "published_revision": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5"
       }
     },
     {
@@ -320,7 +368,7 @@
       "feature": "Kill Switches",
       "requirement": "Per-flag global overrides to disable features instantly in production.",
       "owner": "root",
-      "status": "locally_verified",
+      "status": "verified",
       "implementation": [
         "LeanWeave/Feature/Basic.lean"
       ],
@@ -334,8 +382,12 @@
       "scope_and_limits": "Global disable takes precedence over tenant/audience overrides for all consumers sharing the process Store and affects subsequent requests. No deployment-wide instantaneous cross-node configuration delivery is claimed.",
       "verification": {
         "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
-        "platform_ci": "pending",
-        "api_docs_publication": "pending"
+        "platform_ci": "verified",
+        "api_docs_publication": "verified",
+        "tested_head": "7ec25a11f6393816a8d4bc559dabc1ed030bf51a",
+        "merged_head": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5",
+        "platform_ci_run": 43929923700,
+        "published_revision": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5"
       }
     },
     {
@@ -344,7 +396,7 @@
       "feature": "Audit Trails",
       "requirement": "Log every flag mutation (who changed what, when) for compliance and debugging.",
       "owner": "root",
-      "status": "locally_verified",
+      "status": "verified",
       "implementation": [
         "LeanWeave/Feature/Basic.lean",
         "LeanWeave/Tenant/Config.lean"
@@ -359,8 +411,12 @@
       "scope_and_limits": "Feature definitions and tenant configuration set/remove now atomically append actor/time/full before-and-after snapshots. Full count/byte ledgers fail closed. Acknowledgement requires external persistence; this closes the previously unaudited tenant flag override mutation path.",
       "verification": {
         "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
-        "platform_ci": "pending",
-        "api_docs_publication": "pending"
+        "platform_ci": "verified",
+        "api_docs_publication": "verified",
+        "tested_head": "7ec25a11f6393816a8d4bc559dabc1ed030bf51a",
+        "merged_head": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5",
+        "platform_ci_run": 43929923700,
+        "published_revision": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5"
       }
     },
     {
@@ -369,7 +425,7 @@
       "feature": "GraphQL Subscriptions",
       "requirement": "WebSocket-based GraphQL execution with real-time subscription support, potentially reusing the Channel/PubSub layer.",
       "owner": "protocols",
-      "status": "locally_verified",
+      "status": "verified",
       "implementation": [
         "LeanWeave/GraphQL/Schema.lean",
         "LeanWeave/GraphQL/Execution.lean",
@@ -384,11 +440,15 @@
       "evidence": [
         "test/evidence/graphql-clients.json"
       ],
-      "scope_and_limits": "Typed query, ordered mutation, introspection and graphql-transport-ws subscription execution use cooperative AppM operations and local PubSub. Official GraphQL.js introspection/buildClientSchema/assertValidSchema and graphql-ws mutation broadcasts/completion are exercised. This bounded profile uses finite closed value objects, enums/scalars/arrays/nullability; nested fields project values rather than run independent asynchronous resolvers. Interfaces, unions, recursive named schemas, custom executable directives, SDL construction, APQ, defer/stream and federation are not implemented. Validation covers the selected operation. The final numeric-parser changes are covered by current-source native/wire and official-client reruns; final platform CI remains pending.",
+      "scope_and_limits": "Typed query, ordered mutation, introspection and graphql-transport-ws subscription execution use cooperative AppM operations and local PubSub. Official GraphQL.js introspection/buildClientSchema/assertValidSchema and graphql-ws mutation broadcasts/completion are exercised. This bounded profile uses finite closed value objects, enums/scalars/arrays/nullability; nested fields project values rather than run independent asynchronous resolvers. Interfaces, unions, recursive named schemas, custom executable directives, SDL construction, APQ, defer/stream and federation are not implemented. Validation covers the selected operation. The final numeric-parser changes are covered by current-source native/wire and official-client reruns; the final platform CI matrix above passed on the identical merged implementation tree.",
       "verification": {
         "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
-        "platform_ci": "pending",
-        "api_docs_publication": "pending"
+        "platform_ci": "verified",
+        "api_docs_publication": "verified",
+        "tested_head": "7ec25a11f6393816a8d4bc559dabc1ed030bf51a",
+        "merged_head": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5",
+        "platform_ci_run": 43929923700,
+        "published_revision": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5"
       }
     },
     {
@@ -397,7 +457,7 @@
       "feature": "gRPC & gRPC-Web",
       "requirement": "Native support for Protobuf schema parsing, unary and streaming RPCs, and gRPC-Web on plain HTTP/1.1+.",
       "owner": "protocols",
-      "status": "locally_verified",
+      "status": "verified",
       "implementation": [
         "LeanWeave/Protobuf/Descriptor.lean",
         "LeanWeave/Protobuf/Compiler.lean",
@@ -415,11 +475,15 @@
         "docs/platform/evidence/grpc-web-browser.json",
         "docs/platform/evidence/grpc-web-webkit-final.json"
       ],
-      "scope_and_limits": "Native bounded proto3 parsing/code generation/codecs and unary, server-, client- and bidirectional-streaming RPCs interoperate with official grpcio/protobuf. Duplex output before request half-close,480 KB flow control, deadline/cancel, cardinality, framing and trailer errors are exercised. gRPC-Web binary/text unary and server streaming use real HTTP1/HTTP2 clients and an official browser client. The descriptor profile is self-contained; imported type resolution, proto2/editions/reflection and compressed messages are not implemented. Client/bidirectional streaming are native gRPC HTTP2 features, not a claim about the browser gRPC-Web protocol. Current-source compile/wire and official browser client reruns pass in both Chromium and WebKit; final platform CI remains pending.",
+      "scope_and_limits": "Native bounded proto3 parsing/code generation/codecs and unary, server-, client- and bidirectional-streaming RPCs interoperate with official grpcio/protobuf. Duplex output before request half-close,480 KB flow control, deadline/cancel, cardinality, framing and trailer errors are exercised. gRPC-Web binary/text unary and server streaming use real HTTP1/HTTP2 clients and an official browser client. The descriptor profile is self-contained; imported type resolution, proto2/editions/reflection and compressed messages are not implemented. Client/bidirectional streaming are native gRPC HTTP2 features, not a claim about the browser gRPC-Web protocol. Current-source compile/wire and official browser client reruns pass in both Chromium and WebKit; the final platform CI matrix above passed on the identical merged implementation tree.",
       "verification": {
         "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
-        "platform_ci": "pending",
-        "api_docs_publication": "pending"
+        "platform_ci": "verified",
+        "api_docs_publication": "verified",
+        "tested_head": "7ec25a11f6393816a8d4bc559dabc1ed030bf51a",
+        "merged_head": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5",
+        "platform_ci_run": 43929923700,
+        "published_revision": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5"
       }
     },
     {
@@ -428,7 +492,7 @@
       "feature": "SSE (Server-Sent Events)",
       "requirement": "A first-class `SSE` response type with keep-alive, automatic reconnect handling, and event ID tracking.",
       "owner": "realtime",
-      "status": "locally_verified",
+      "status": "verified",
       "implementation": [
         "LeanWeave/SSE.lean",
         "LeanWeave/Live/Client.lean"
@@ -445,8 +509,12 @@
       "scope_and_limits": "First-class SSE body, safe event fields, retry hints, keepalive, IDs, bounded replay and explicit replay-gap reset are implemented. Browser EventSource supplies reconnect mechanics; server Last-Event-ID handling is wire tested.",
       "verification": {
         "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
-        "platform_ci": "pending",
-        "api_docs_publication": "pending"
+        "platform_ci": "verified",
+        "api_docs_publication": "verified",
+        "tested_head": "7ec25a11f6393816a8d4bc559dabc1ed030bf51a",
+        "merged_head": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5",
+        "platform_ci_run": 43929923700,
+        "published_revision": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5"
       }
     },
     {
@@ -455,7 +523,7 @@
       "feature": "OpenTelemetry Integration",
       "requirement": "W3C `traceparent` propagation, automatic spans for DB queries, external HTTP calls, and job execution, with OTLP export.",
       "owner": "root",
-      "status": "locally_verified",
+      "status": "verified",
       "implementation": [
         "LeanWeave/Observability/Trace.lean",
         "LeanWeave/Observability/Jobs.lean",
@@ -477,8 +545,12 @@
       "scope_and_limits": "Real official OpenTelemetry Collector receives request/SQL/HTTP/job spans with W3C parent propagation and no SQL parameters. Owner-local SQL and HTTP pools instrument their actual operations; job spans surround actual execution. Span inputs are bounded before retention and stream finish/cancel closes spans once. Export is bounded OTLP HTTP JSON traces with at-least-once retries, not an all-signals OpenTelemetry SDK. Strict HTTPS client trust is preloaded from a bounded CA PEM at startup on supported OpenSSL-compatible curl; operating-system trust work requires explicit systemTrust opt-in. H1/H2 TLS, source-file removal after preload, trust/hostname failure, operation limits and cancel are wire-tested.",
       "verification": {
         "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
-        "platform_ci": "pending",
-        "api_docs_publication": "pending"
+        "platform_ci": "verified",
+        "api_docs_publication": "verified",
+        "tested_head": "7ec25a11f6393816a8d4bc559dabc1ed030bf51a",
+        "merged_head": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5",
+        "platform_ci_run": 43929923700,
+        "published_revision": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5"
       }
     },
     {
@@ -487,7 +559,7 @@
       "feature": "Structured Logging with Sampling",
       "requirement": "Context-aware logging (request ID, tenant, user) with dynamic sampling rates to reduce noise in high-traffic environments.",
       "owner": "root",
-      "status": "locally_verified",
+      "status": "verified",
       "implementation": [
         "LeanWeave/Observability/Logging.lean",
         "LeanWeave/Observability/File.lean"
@@ -501,8 +573,12 @@
       "scope_and_limits": "Bounded context-correlated JSON records include request ID, tenant and verified principal, with dynamic sampling/level, redaction and a dedicated asynchronous file sink. Error preservation still obeys explicit byte/count bounds and minimum level; overload/drop accounting is observable. A blocking kernel file write/flush cannot be hard-preempted.",
       "verification": {
         "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
-        "platform_ci": "pending",
-        "api_docs_publication": "pending"
+        "platform_ci": "verified",
+        "api_docs_publication": "verified",
+        "tested_head": "7ec25a11f6393816a8d4bc559dabc1ed030bf51a",
+        "merged_head": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5",
+        "platform_ci_run": 43929923700,
+        "published_revision": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5"
       }
     },
     {
@@ -511,24 +587,33 @@
       "feature": "Health Check Probes",
       "requirement": "Distinct `/health/live` (process alive), `/health/ready` (dependencies connected), and `/health/startup` (initialization complete) endpoints.",
       "owner": "root",
-      "status": "locally_verified",
+      "status": "verified",
       "implementation": [
         "LeanWeave/Operations/Health.lean",
         "integration/platform/Health.lean"
       ],
       "checks": [
         "LeanWeave/Test/PlatformOperations.lean",
-        "test/platform/health.py"
+        "test/platform/health.py",
+        "test/platform/test_health_probes.py"
       ],
       "evidence": [
         "docs/platform/platform-result.json",
         "docs/platform/health-result.json"
       ],
-      "scope_and_limits": "Distinct live/ready/startup endpoints read published snapshots and never execute dependency I/O in the HTTP callback. ProbeSet schedules bounded owner-local AppM checks from native onTick. A real two-owner verify-full TLS PostgreSQL fixture starts 503, becomes ready 200, loses readiness 503 after login revocation/backend termination, and recovers 200 after restoration while live/startup stay 200. HTTP1/HTTP2 and HEAD metadata/body suppression are exercised. Applications provide and mount their actual dependency probes; a published snapshot alone is not evidence that an arbitrary dependency is healthy.",
+      "scope_and_limits": "Distinct live/ready/startup endpoints never execute dependency I/O in HTTP callbacks. Managed native AtomicFlag latches make completed startup and drain monotone without taking the dependency mutex; readiness uses a try-lock snapshot and fails closed under contention or draining. The integration fixture runs at most one bounded AppM SELECT 1 probe per reactor owner from onTick. Its HTTP1 harness retains a verified connection to each owner and checks x-health-owner on every owner assertion, rather than assuming fresh connections alternate workers; adversarial owner-distribution regressions test that harness. A deterministic held-mutex regression checks startup/drain latches. Actual two-owner verify-full TLS PostgreSQL outage/recovery, HTTP1/HTTP2 and HEAD metadata/body suppression, and pending-probe SIGTERM cleanup are exercised. Applications remain responsible for publishing their real dependency readiness; a snapshot alone is not evidence that an arbitrary dependency is healthy.",
       "verification": {
         "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
-        "platform_ci": "pending",
-        "api_docs_publication": "pending"
+        "platform_ci": "verified",
+        "api_docs_publication": "verified",
+        "tested_head": "7ec25a11f6393816a8d4bc559dabc1ed030bf51a",
+        "merged_head": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5",
+        "platform_ci_run": 43929923700,
+        "published_revision": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5"
+      },
+      "native_dependency": {
+        "module": "LeanNet.AtomicFlag",
+        "revision": "05733390a34012b2a388fd35bf2eb704916c30be"
       }
     },
     {
@@ -537,7 +622,7 @@
       "feature": "Graceful Drain & Shutdown",
       "requirement": "On `SIGTERM`, stop accepting new connections, finish in-flight requests, flush job queues, close DB pools, and exit cleanly within a timeout.",
       "owner": "root",
-      "status": "locally_verified",
+      "status": "verified",
       "implementation": [
         "LeanWeave/Operations/Runtime.lean",
         "LeanWeave/Jobs/Lifecycle.lean",
@@ -556,11 +641,15 @@
         "docs/platform/platform-result.json",
         "docs/platform/health-result.json"
       ],
-      "scope_and_limits": "Actual SIGTERM stops admission, completes admitted jobs or cancels/requeues them, cancels pending owner probes, closes owner DB pools and exits normally within tested budgets. The real health fixture observed 0.456301 s against a 1000 ms native shutdown budget and zero PostgreSQL backends after exit; this is a measured case, not a hard realtime guarantee. One absolute native deadline is propagated. Blocking kernel file write/flush and arbitrary noncooperative user IO cannot be hard-preempted.",
+      "scope_and_limits": "Actual SIGTERM stops admission, completes admitted jobs or cancels/requeues them, cancels pending owner probes, closes owner DB pools and exits normally within tested budgets. The source-bound health receipt records the observed duration against its 1000 ms native shutdown budget and zero PostgreSQL backends after exit; that is a measured case, not a hard realtime guarantee. One absolute native deadline is propagated. Blocking kernel file write/flush and arbitrary noncooperative user IO cannot be hard-preempted.",
       "verification": {
         "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
-        "platform_ci": "pending",
-        "api_docs_publication": "pending"
+        "platform_ci": "verified",
+        "api_docs_publication": "verified",
+        "tested_head": "7ec25a11f6393816a8d4bc559dabc1ed030bf51a",
+        "merged_head": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5",
+        "platform_ci_run": 43929923700,
+        "published_revision": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5"
       }
     },
     {
@@ -569,7 +658,7 @@
       "feature": "Audit Logging",
       "requirement": "Immutable, structured records of security-sensitive actions (login, permission changes, data exports) with tamper-evident hashing.",
       "owner": "root",
-      "status": "locally_verified",
+      "status": "verified",
       "implementation": [
         "LeanWeave/Security/Audit.lean",
         "LeanWeave/Security/Journal.lean",
@@ -584,8 +673,12 @@
       "scope_and_limits": "Immutable application records form a SHA256 chain with single-writer append/flush receipts, replay, bounded JSON numeric parsing, tamper/reorder/truncation checks and locking/restart tests. Applications explicitly await Journal.record for sensitive actions. Detecting tail replacement/full rewrite requires an externally trusted checkpoint. OS flush is not an fsync/power-loss or WORM-storage guarantee.",
       "verification": {
         "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
-        "platform_ci": "pending",
-        "api_docs_publication": "pending"
+        "platform_ci": "verified",
+        "api_docs_publication": "verified",
+        "tested_head": "7ec25a11f6393816a8d4bc559dabc1ed030bf51a",
+        "merged_head": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5",
+        "platform_ci_run": 43929923700,
+        "published_revision": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5"
       }
     },
     {
@@ -594,7 +687,7 @@
       "feature": "Secrets Management",
       "requirement": "Integration with Vault, AWS Secrets Manager, or environment encryption, with automatic rotation and in-memory-only decryption.",
       "owner": "root",
-      "status": "locally_verified",
+      "status": "verified",
       "implementation": [
         "LeanWeave/Secrets/Manager.lean",
         "adapters/http/LeanWeaveHttp/Vault.lean"
@@ -610,8 +703,12 @@
       "scope_and_limits": "Actual TLS-verified official Vault KV v2 load/rotation, bootstrap token replacement/revocation and failed-refresh expiry are exercised. Opaque secret values and tokens have no Repr/JSON instance and are held in memory; physical zeroization of every immutable copy is not promised. Rotation is cooperative and deadlines/expiry fail closed. Vault supplies the requested provider alternative; AWS Secrets Manager and environment encryption are not implemented.",
       "verification": {
         "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
-        "platform_ci": "pending",
-        "api_docs_publication": "pending"
+        "platform_ci": "verified",
+        "api_docs_publication": "verified",
+        "tested_head": "7ec25a11f6393816a8d4bc559dabc1ed030bf51a",
+        "merged_head": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5",
+        "platform_ci_run": 43929923700,
+        "published_revision": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5"
       }
     },
     {
@@ -620,7 +717,7 @@
       "feature": "Content Security Policy (CSP) Builder",
       "requirement": "A typed DSL for constructing CSP headers that prevent XSS and data exfiltration, with nonce support.",
       "owner": "root",
-      "status": "locally_verified",
+      "status": "verified",
       "implementation": [
         "LeanWeave/Security/Csp.lean",
         "LeanWeave/Cache/Response.lean"
@@ -640,8 +737,12 @@
       "scope_and_limits": "Typed csp! checks and per-response random nonce/header binding are enforced by a real browser. Context nonce and nonce-bearing CSP/report-only responses bypass response and request-fragment caching in either pipeline order, including Redis cache guards; regression tests cover both orders. Low-level explicit-key fragment caches remain caller responsibility. This is a CSP construction/enforcement feature, not a universal XSS-prevention guarantee for arbitrary application code.",
       "verification": {
         "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
-        "platform_ci": "pending",
-        "api_docs_publication": "pending"
+        "platform_ci": "verified",
+        "api_docs_publication": "verified",
+        "tested_head": "7ec25a11f6393816a8d4bc559dabc1ed030bf51a",
+        "merged_head": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5",
+        "platform_ci_run": 43929923700,
+        "published_revision": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5"
       }
     },
     {
@@ -650,7 +751,7 @@
       "feature": "Plugin System with Hot Reload",
       "requirement": "Define lifecycle hooks (`onStart`, `onRequest`, `onShutdown`) that plugins can implement. Support dynamic loading/unloading in development without restarting the server.",
       "owner": "root",
-      "status": "locally_verified",
+      "status": "verified",
       "implementation": [
         "LeanWeave/Plugin/Manager.lean",
         "adapters/plugins/LeanWeavePlugins/Loader.lean",
@@ -665,8 +766,12 @@
       "scope_and_limits": "True same-path shared-library hot reload without restart; old deferred requests/streams retain generations until completion/cancel. Max generations/in-flight, failed-load preservation, H1/H2 reset/HEAD/SIGTERM are proved locally. Native C ABI is trusted code, not a sandbox; no unsafe unloading of Lean global initializer closures is attempted.",
       "verification": {
         "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
-        "platform_ci": "pending",
-        "api_docs_publication": "pending"
+        "platform_ci": "verified",
+        "api_docs_publication": "verified",
+        "tested_head": "7ec25a11f6393816a8d4bc559dabc1ed030bf51a",
+        "merged_head": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5",
+        "platform_ci_run": 43929923700,
+        "published_revision": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5"
       }
     },
     {
@@ -675,7 +780,7 @@
       "feature": "Lean 4 Macro-based DSLs",
       "requirement": "Use Lean's hygienic macros to create expressive, compile-time-checked DSLs for routes, schemas, and policies, catching errors at build time rather than runtime.",
       "owner": "protocols",
-      "status": "locally_verified",
+      "status": "verified",
       "implementation": [
         "LeanWeave/Router/DSL.lean",
         "LeanWeave/Schema/DSL.lean",
@@ -696,8 +801,12 @@
       "scope_and_limits": "Actual elaboration-checked route/schema/authorization/CSP DSLs reject ambiguous routes, wrong handler types, contradictory schemas and invalid policies. Fresh generated identifiers preserve caller section variables and context/capture names. Runtime/compiler regressions exercise section parameters, implicit/generic/typeclass handlers and reverse URLs. The current platform receipt includes MacroHygiene, BodyBounds and JSON-boundary tests; compile-negative protocol and policy reports remain separately linked.",
       "verification": {
         "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
-        "platform_ci": "pending",
-        "api_docs_publication": "pending"
+        "platform_ci": "verified",
+        "api_docs_publication": "verified",
+        "tested_head": "7ec25a11f6393816a8d4bc559dabc1ed030bf51a",
+        "merged_head": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5",
+        "platform_ci_run": 43929923700,
+        "published_revision": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5"
       }
     },
     {
@@ -706,7 +815,7 @@
       "feature": "Built-in API Documentation",
       "requirement": "Auto-generate OpenAPI/Swagger specs from route definitions and type signatures, reducing documentation drift.",
       "owner": "protocols",
-      "status": "locally_verified",
+      "status": "verified",
       "implementation": [
         "LeanWeave/OpenApi/DSL.lean",
         "LeanWeave/OpenApi/Basic.lean",
@@ -723,8 +832,12 @@
       "scope_and_limits": "weave_api drives actual route definitions, checked handler input/output codecs and OpenAPI 3.1.1 JSON from one declaration, rejecting missing/colliding metadata and unrepresentable overlaps. A real native spec endpoint is exercised. Swagger page/bootstrap helpers use application-supplied hosted assets; a bundled Swagger distribution and arbitrary Lean type reflection are not implemented. Generated spec functionality is locally verified; publication of the final integrated API documentation remains pending.",
       "verification": {
         "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
-        "platform_ci": "pending",
-        "api_docs_publication": "pending"
+        "platform_ci": "verified",
+        "api_docs_publication": "verified",
+        "tested_head": "7ec25a11f6393816a8d4bc559dabc1ed030bf51a",
+        "merged_head": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5",
+        "platform_ci_run": 43929923700,
+        "published_revision": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5"
       }
     }
   ],
@@ -734,31 +847,215 @@
     "head": "5f6aa966b8678867719561405d656516cefe3241",
     "working_tree_dirty": true,
     "lean_net_revision": "dcce82480a6985b3269a474b12b81863e6bdb115",
-    "binding": "Use each report source manifest/fixture digest for the tested files. The working tree contains final integration changes; this merge does not assign them the HEAD revision or infer unrecorded transitive source coverage."
+    "binding": "Use each report source manifest/fixture digest for the tested files. The working tree contains final integration changes; this merge does not assign them the HEAD revision or infer unrecorded transitive source coverage.",
+    "historical": true
   },
-  "status": "locally_verified_pending_final_gates",
+  "status": "verified",
   "verification_gates": {
     "platform_ci": {
-      "status": "pending",
-      "required": [
-        "Framework native/wire Linux, macOS and Windows",
-        "Real PostgreSQL/Redis/Vault/Collector services on supported CI platform",
-        "Actual Chromium and WebKit Live/CSP and official gRPC-Web clients"
+      "status": "verified",
+      "checked_at_utc": "2026-11-16T19:01:42.276738+00:00",
+      "head": "7ec25a11f6393816a8d4bc559dabc1ed030bf51a",
+      "merged_head": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5",
+      "same_tree_verified": true,
+      "runs": [
+        {
+          "id": 43929923700,
+          "name": "Application platform acceptance",
+          "head": "7ec25a11f6393816a8d4bc559dabc1ed030bf51a",
+          "conclusion": "success",
+          "url": "https://github.com/isavita/lean-weave/actions/runs/43929923700",
+          "jobs": [
+            {
+              "name": "native (ubuntu-latest)",
+              "conclusion": "success"
+            },
+            {
+              "name": "native (macos-15-intel)",
+              "conclusion": "success"
+            },
+            {
+              "name": "native (windows-latest)",
+              "conclusion": "success"
+            },
+            {
+              "name": "services",
+              "runner": "ubuntu-latest",
+              "conclusion": "success"
+            },
+            {
+              "name": "browsers",
+              "runner": "ubuntu-latest",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 43929923827,
+          "name": "LeanWeave acceptance",
+          "head": "7ec25a11f6393816a8d4bc559dabc1ed030bf51a",
+          "conclusion": "success",
+          "url": "https://github.com/isavita/lean-weave/actions/runs/43929923827",
+          "jobs": [
+            {
+              "name": "native (ubuntu-latest)",
+              "conclusion": "success"
+            },
+            {
+              "name": "native (macos-15-intel)",
+              "conclusion": "success"
+            },
+            {
+              "name": "native (windows-latest)",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 43929923763,
+          "name": "Optional adapters",
+          "head": "7ec25a11f6393816a8d4bc559dabc1ed030bf51a",
+          "conclusion": "success",
+          "url": "https://github.com/isavita/lean-weave/actions/runs/43929923763",
+          "jobs": [
+            {
+              "name": "unix (ubuntu-latest)",
+              "conclusion": "success"
+            },
+            {
+              "name": "unix (macos-15-intel)",
+              "conclusion": "success"
+            },
+            {
+              "name": "windows",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 43929923811,
+          "name": "API documentation",
+          "head": "7ec25a11f6393816a8d4bc559dabc1ed030bf51a",
+          "conclusion": "success",
+          "url": "https://github.com/isavita/lean-weave/actions/runs/43929923811",
+          "jobs": [
+            {
+              "name": "build",
+              "conclusion": "success"
+            },
+            {
+              "name": "deploy",
+              "conclusion": "skipped"
+            }
+          ],
+          "scope": "API build only; this is not publication evidence."
+        }
       ],
-      "note": "Configured workflows and the prior core release are not acceptance evidence for the final platform revision. Root will record immutable run IDs and conclusions after execution."
+      "scope_and_limits": "Framework native acceptance covers Ubuntu, macOS Intel and Windows. Actual PostgreSQL/Redis/Vault/Collector service acceptance and Chromium/WebKit browser jobs run on Ubuntu; Windows wire/native results are not a claim that Windows hosted those services. Local reports separately identify macOS arm64. Each item remains limited to its documented supported profile."
     },
     "api_docs_publication": {
-      "status": "pending",
-      "required": "Build and publish doc-gen4 API docs from the final integrated platform revision; verify that the published new modules are present."
+      "status": "verified",
+      "build_status": "verified",
+      "build_run": 43933711151,
+      "build_url": "https://github.com/isavita/lean-weave/actions/runs/43933711151",
+      "publication_evidence": {
+        "status": "verified",
+        "published_revision": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5",
+        "lean_net_revision": "05733390a34012b2a388fd35bf2eb704916c30be",
+        "deployment_run": 43933711151,
+        "deployment_url": "https://github.com/isavita/lean-weave/actions/runs/43933711151",
+        "site_url": "https://isavita.github.io/lean-weave/",
+        "checked_at_utc": "2026-11-16T19:04:38.361061+00:00",
+        "checks": [
+          {
+            "path": "build-info.json",
+            "url": "https://isavita.github.io/lean-weave/build-info.json",
+            "status": 200,
+            "bytes": 185,
+            "sha256": "eb39575c6f306614d26668c4c1ca12a2cb46455fc34fd7e64c4978cdb22a84ac"
+          },
+          {
+            "path": "index.html",
+            "url": "https://isavita.github.io/lean-weave/index.html",
+            "status": 200,
+            "bytes": 4920,
+            "sha256": "8651eb026d0088a6a622d1b5182a4279a83bc716d2ba80ec7904866fde2102cb"
+          },
+          {
+            "path": "LeanWeave/GraphQL/Execution.html",
+            "url": "https://isavita.github.io/lean-weave/LeanWeave/GraphQL/Execution.html",
+            "status": 200,
+            "bytes": 26958,
+            "sha256": "37a0c0feebead5a0869bc6af3d1cea874acad0146a1863ce6106e1b7e5c117c6"
+          },
+          {
+            "path": "LeanWeave/GraphQL/WebSocket.html",
+            "url": "https://isavita.github.io/lean-weave/LeanWeave/GraphQL/WebSocket.html",
+            "status": 200,
+            "bytes": 12049,
+            "sha256": "4199fe7b94d8a11e3748647772e468d5235108b69438be148e6bce993d96a9b7"
+          },
+          {
+            "path": "LeanWeave/Operations/Health.html",
+            "url": "https://isavita.github.io/lean-weave/LeanWeave/Operations/Health.html",
+            "status": 200,
+            "bytes": 29079,
+            "sha256": "d28770d1410c42a0834d7dc7ecd7963fc9a580ca4de3412b5893e6869f75099e"
+          },
+          {
+            "path": "LeanNet/AtomicFlag.html",
+            "url": "https://isavita.github.io/lean-weave/LeanNet/AtomicFlag.html",
+            "status": 200,
+            "bytes": 7972,
+            "sha256": "a3b087c1e6a0baabf076bcecb804de9f7224b094b08d91a8944538e58cac23f9"
+          },
+          {
+            "path": "LeanWeave/Grpc/Service.html",
+            "url": "https://isavita.github.io/lean-weave/LeanWeave/Grpc/Service.html",
+            "status": 200,
+            "bytes": 24722,
+            "sha256": "6cc14f793fdc7839d81912b57134ae245752c7a26726b28b7bcbc05cfae0eb1a"
+          },
+          {
+            "path": "LeanWeave/Live.html",
+            "url": "https://isavita.github.io/lean-weave/LeanWeave/Live.html",
+            "status": 200,
+            "bytes": 28471,
+            "sha256": "3acc66d5e14c04e63e8e5a27545e9af030db3ac49e1ccc9df21dc592b825ec6d"
+          },
+          {
+            "path": "LeanWeavePostgres/Workflows.html",
+            "url": "https://isavita.github.io/lean-weave/LeanWeavePostgres/Workflows.html",
+            "status": 200,
+            "bytes": 21273,
+            "sha256": "7c00e1390615309ce5ad89a2dc213b7e6ec7d621f709ae6fcfbe3caa793bd7a0"
+          },
+          {
+            "path": "LeanWeaveHttp/Vault.html",
+            "url": "https://isavita.github.io/lean-weave/LeanWeaveHttp/Vault.html",
+            "status": 200,
+            "bytes": 8343,
+            "sha256": "5ec065198c316ab3f7e131035c0a93267d5a2ddc14044594bbaadd0ee25dfa24"
+          },
+          {
+            "path": "LeanWeavePlugins/Loader.html",
+            "url": "https://isavita.github.io/lean-weave/LeanWeavePlugins/Loader.html",
+            "status": 200,
+            "bytes": 8327,
+            "sha256": "de08520d2a40e2a46cbcb965da58f56f16814a003ae9ff3bd45d91f3967a67ac"
+          }
+        ],
+        "note": "Public build-info.json matches the merged implementation revision and pinned native dependency; all listed public pages returned HTTP200. This completion record and benchmark result updates change JSON metadata only."
+      }
     },
     "final_receipt_refresh": {
-      "status": "locally_verified",
+      "status": "verified",
       "required": [
         "GraphQL native/wire and official GraphQL.js/graphql-ws clients after final numeric-parser changes",
         "Final source-bound protocol compile/wire and official gRPC-Web browser receipts",
         "Current multiview Live/CSP receipts in Chromium and WebKit"
       ],
-      "note": "Completed: GraphQL unit and8real wire tests plus official GraphQL.js17.1/graphql-ws6.4.2; Stream/SSE/PubSub/Presence unit and7real wire tests; Live/CSP multiview and mixed fallback in Chromium158.0.8127.18 and WebKit27.2; protocol compile19, official grpcio/protobuf wire11, and6official gRPC-Web checks in each browser. Current source/runner/manifest digests and fixture hashes match. This does not substitute for final framework CI or publication."
+      "note": "Current-source local client/wire/browser receipts match native pin 05733390 and their recorded file hashes. GraphQL unit and 8 wire tests plus official GraphQL.js 17.1/graphql-ws 6.4.2; Stream/SSE/PubSub/Presence unit and 7 wire tests; Live/CSP multiview and mixed fallback in Chromium 158.0.8127.18 and WebKit 27.2; protocol compile 19, official grpcio/protobuf wire 11, and 6 official gRPC-Web checks per browser passed. The final framework CI runs above independently pass on the same implementation tree. Merged API documentation deployment and public module pages are verified below."
     }
   },
   "cross_cutting_acceptance": [
@@ -812,99 +1109,445 @@
         "integration/platform/Health.lean"
       ],
       "checks": [
-        "test/platform/health.py"
+        "test/platform/health.py",
+        "LeanWeave/Test/PlatformOperations.lean",
+        "test/platform/test_health_probes.py"
       ],
       "evidence": [
         "docs/platform/health-result.json"
       ],
-      "scope_and_limits": "Real disposable verify-full TLS PostgreSQL; two owners, one connection and at most one probe execution per owner; onTick SELECT 1, real revocation/outage/recovery, HTTP1+HTTP2 and HEAD; SIGTERM cancels pending probes and closes pools. Does not claim hard preemption of a stalled OS filesystem."
+      "scope_and_limits": "Real disposable verify-full TLS PostgreSQL; two owners, one connection and at most one probe execution per owner; onTick SELECT 1 and HTTP callbacks reading readiness only. Native managed AtomicFlag startup/drain latches remain monotone under a deliberately held dependency mutex; readiness try-lock failure returns unavailable. Owner-aware HTTP1 discovery retains one verified connection per actual owner, with bounded discovery and adversarial routing regressions. Real revocation/outage/recovery, HTTP1+HTTP2/HEAD and SIGTERM cancellation/pool closure pass. Does not claim hard preemption of a stalled OS filesystem.",
+      "native_dependency": {
+        "module": "LeanNet.AtomicFlag",
+        "revision": "05733390a34012b2a388fd35bf2eb704916c30be"
+      }
     }
   ],
   "review_basis": {
     "path": "docs/platform/acceptance-review.json",
-    "note": "The independent review is historical input. Its stale/pending statements are superseded only where current source-bound reports or explicit current tests exist; its publication and supported-profile limits remain preserved."
+    "note": "The independent review is historical input, not a current receipt. Its gaps are closed only by the implementation/source manifests and immutable successful CI runs recorded here; its supported-profile limits remain preserved."
   },
-  "refreshed_at_utc": "2026-11-16T16:26:39.969762+00:00",
+  "refreshed_at_utc": "2026-11-16T19:01:42.276738+00:00",
   "source_after_local_refresh": {
-    "head": "45c122f699ce8ad5f092f1658263c9f3addf1e7d",
-    "lean_net_revision": "dcce82480a6985b3269a474b12b81863e6bdb115",
-    "binding": "Current source/runner/manifest and native fixture digests are audited below. This records local verification, not the result of pending framework CI."
+    "head": "7ec25a11f6393816a8d4bc559dabc1ed030bf51a",
+    "merged_head": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5",
+    "tree": "34e52a21e91a96058e27654aec9c92db6a7d7b68",
+    "same_tree_verified": true,
+    "lean_net_revision": "05733390a34012b2a388fd35bf2eb704916c30be",
+    "binding": "The CI-tested head and merged head have identical Git trees. Each recorded source manifest and available fixture/binary digest was independently compared with current files. Local benchmark report updates are not silently relabeled as a clean tree; their original commit/dirty fields are preserved."
   },
   "evidence_freshness": [
     {
       "path": "docs/platform/platform-result.json",
-      "recorded_source_hashes": 40,
+      "recorded_source_hashes": 43,
+      "hash_fields": [
+        "source_sha256"
+      ],
       "mismatches": []
     },
     {
       "path": "docs/platform/external-result.json",
       "recorded_source_hashes": 14,
-      "mismatches": []
+      "hash_fields": [
+        "source_sha256"
+      ],
+      "mismatches": [],
+      "binary": {
+        "path": "integration/platform/.lake/build/bin/platform-integration",
+        "recorded_sha256": "e194d91d4972edf103ff7af8d72e0a05ee692c2c3fba42eb0a333de9778206d7",
+        "matches_current": true
+      }
     },
     {
       "path": "docs/platform/health-result.json",
-      "recorded_source_hashes": 11,
-      "mismatches": []
+      "recorded_source_hashes": 12,
+      "hash_fields": [
+        "source_sha256"
+      ],
+      "mismatches": [],
+      "binary": {
+        "path": "integration/platform/.lake/build/bin/platform-integration",
+        "recorded_sha256": "e194d91d4972edf103ff7af8d72e0a05ee692c2c3fba42eb0a333de9778206d7",
+        "matches_current": true
+      }
     },
     {
       "path": "docs/platform/jobs-result.json",
-      "recorded_source_hashes": 16,
+      "recorded_source_hashes": 17,
+      "hash_fields": [
+        "sources_sha256"
+      ],
       "mismatches": []
     },
     {
       "path": "docs/platform/plugins-result.json",
       "recorded_source_hashes": 9,
+      "hash_fields": [
+        "sources_sha256"
+      ],
       "mismatches": []
     },
     {
       "path": "adapters/http/test/wire-result.json",
-      "recorded_source_hashes": 4,
+      "recorded_source_hashes": 5,
+      "hash_fields": [
+        "sources_sha256"
+      ],
       "mismatches": []
     },
     {
       "path": "adapters/redis/test/pubsub-presence-result.json",
       "recorded_source_hashes": 6,
+      "hash_fields": [
+        "sources_sha256"
+      ],
       "mismatches": []
     },
     {
       "path": "test/evidence/graphql-clients.json",
       "recorded_source_hashes": 26,
-      "mismatches": []
+      "hash_fields": [
+        "sourceHashes"
+      ],
+      "mismatches": [],
+      "binary": {
+        "path": ".lake/build/bin/weave-graphql-fixture",
+        "recorded_sha256": "84ea3b78c81d2bddf7069c4b14dae30635ef9449cc7834ee0b8ea015073c1749",
+        "matches_current": true
+      }
     },
     {
       "path": "test/evidence/realtime-browser.json",
       "recorded_source_hashes": 24,
-      "mismatches": []
+      "hash_fields": [
+        "source_sha256"
+      ],
+      "mismatches": [],
+      "binary": {
+        "path": ".lake/build/bin/weave-realtime-fixture",
+        "recorded_sha256": "a43059397fcf972bc9e33a26728ccd6afd9c73f7ab90a47afceb7e3ab06d95c3",
+        "matches_current": true
+      }
     },
     {
       "path": "docs/platform/evidence/realtime-browser-repro.json",
       "recorded_source_hashes": 24,
-      "mismatches": []
+      "hash_fields": [
+        "source_sha256"
+      ],
+      "mismatches": [],
+      "binary": {
+        "path": ".lake/build/bin/weave-realtime-fixture",
+        "recorded_sha256": "a43059397fcf972bc9e33a26728ccd6afd9c73f7ab90a47afceb7e3ab06d95c3",
+        "matches_current": true
+      }
     },
     {
       "path": "docs/platform/evidence/realtime-webkit-final.json",
       "recorded_source_hashes": 24,
-      "mismatches": []
+      "hash_fields": [
+        "source_sha256"
+      ],
+      "mismatches": [],
+      "binary": {
+        "path": ".lake/build/bin/weave-realtime-fixture",
+        "recorded_sha256": "a43059397fcf972bc9e33a26728ccd6afd9c73f7ab90a47afceb7e3ab06d95c3",
+        "matches_current": true
+      }
     },
     {
       "path": "docs/platform/evidence/protocols-compile.json",
       "recorded_source_hashes": 40,
+      "hash_fields": [
+        "source_sha256"
+      ],
       "mismatches": []
     },
     {
       "path": "docs/platform/evidence/protocols-wire.json",
       "recorded_source_hashes": 40,
-      "mismatches": []
+      "hash_fields": [
+        "source_sha256"
+      ],
+      "mismatches": [],
+      "binary": {
+        "path": ".lake/build/bin/weave-protocol-fixture",
+        "recorded_sha256": "786456be87215dc54617d6388352bcca067a2278652ff16240bc05adc5ccb919",
+        "matches_current": true
+      }
     },
     {
       "path": "docs/platform/evidence/grpc-web-browser.json",
       "recorded_source_hashes": 40,
-      "mismatches": []
+      "hash_fields": [
+        "source_sha256"
+      ],
+      "mismatches": [],
+      "binary": {
+        "path": ".lake/build/bin/weave-protocol-fixture",
+        "recorded_sha256": "786456be87215dc54617d6388352bcca067a2278652ff16240bc05adc5ccb919",
+        "matches_current": true
+      }
     },
     {
       "path": "docs/platform/evidence/grpc-web-webkit-final.json",
       "recorded_source_hashes": 40,
+      "hash_fields": [
+        "source_sha256"
+      ],
+      "mismatches": [],
+      "binary": {
+        "path": ".lake/build/bin/weave-protocol-fixture",
+        "recorded_sha256": "786456be87215dc54617d6388352bcca067a2278652ff16240bc05adc5ccb919",
+        "matches_current": true
+      }
+    },
+    {
+      "path": "docs/platform/crypto-result.json",
+      "recorded_source_hashes": 1,
+      "hash_fields": [
+        "source_sha256"
+      ],
       "mismatches": []
+    },
+    {
+      "path": "benchmarks/results.json",
+      "recorded_source_hashes": 7,
+      "hash_fields": [
+        "source_sha256"
+      ],
+      "mismatches": [],
+      "binary": {
+        "path": ".lake/build/bin/weave-bench",
+        "recorded_sha256": "7ad0a1dbf2c3d1b61ed2b828e9c4505c36a0f8eaeb8923a603e3c9c3d20acde0",
+        "matches_current": true
+      }
+    },
+    {
+      "path": "benchmarks/platform-results.json",
+      "recorded_source_hashes": 10,
+      "hash_fields": [
+        "source_sha256"
+      ],
+      "mismatches": [],
+      "binary": {
+        "path": ".lake/build/bin/weave-platform-bench",
+        "recorded_sha256": "3d86c40c7e799730b7937fbcefdf86819516b60e4b3f3c420e1a11694aa9eed9",
+        "matches_current": true
+      }
+    },
+    {
+      "path": "benchmarks/http-results.json",
+      "recorded_source_hashes": 0,
+      "hash_fields": [],
+      "mismatches": [],
+      "source_binding": "No standalone source manifest is recorded; do not infer per-file coverage from this receipt.",
+      "binary": {
+        "path": ".lake/build/bin/weave-pages",
+        "recorded_sha256": "10554a7b3678baa677db6c6fa7de30f64039e03d336c51d11592b8b5f48bea7d",
+        "matches_current": true
+      }
+    },
+    {
+      "path": "adapters/postgres/test/live-result.json",
+      "recorded_source_hashes": 0,
+      "hash_fields": [],
+      "mismatches": [],
+      "source_binding": "No standalone source manifest is recorded; do not infer per-file coverage from this receipt."
+    },
+    {
+      "path": "adapters/postgres/test/tenant-result.json",
+      "recorded_source_hashes": 0,
+      "hash_fields": [],
+      "mismatches": [],
+      "source_binding": "No standalone source manifest is recorded; do not infer per-file coverage from this receipt."
+    },
+    {
+      "path": "adapters/postgres/test/wire-result.json",
+      "recorded_source_hashes": 0,
+      "hash_fields": [],
+      "mismatches": [],
+      "source_binding": "No standalone source manifest is recorded; do not infer per-file coverage from this receipt."
+    },
+    {
+      "path": "docs/platform/evidence/platform-compile.json",
+      "recorded_source_hashes": 0,
+      "hash_fields": [],
+      "mismatches": [],
+      "source_binding": "No standalone source manifest is recorded; do not infer per-file coverage from this receipt."
     }
-  ]
+  ],
+  "verified_at_utc": "2026-11-16T19:04:38.361061+00:00",
+  "publication": {
+    "status": "verified",
+    "published_revision": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5",
+    "lean_net_revision": "05733390a34012b2a388fd35bf2eb704916c30be",
+    "deployment_run": 43933711151,
+    "deployment_url": "https://github.com/isavita/lean-weave/actions/runs/43933711151",
+    "site_url": "https://isavita.github.io/lean-weave/",
+    "checked_at_utc": "2026-11-16T19:04:38.361061+00:00",
+    "checks": [
+      {
+        "path": "build-info.json",
+        "url": "https://isavita.github.io/lean-weave/build-info.json",
+        "status": 200,
+        "bytes": 185,
+        "sha256": "eb39575c6f306614d26668c4c1ca12a2cb46455fc34fd7e64c4978cdb22a84ac"
+      },
+      {
+        "path": "index.html",
+        "url": "https://isavita.github.io/lean-weave/index.html",
+        "status": 200,
+        "bytes": 4920,
+        "sha256": "8651eb026d0088a6a622d1b5182a4279a83bc716d2ba80ec7904866fde2102cb"
+      },
+      {
+        "path": "LeanWeave/GraphQL/Execution.html",
+        "url": "https://isavita.github.io/lean-weave/LeanWeave/GraphQL/Execution.html",
+        "status": 200,
+        "bytes": 26958,
+        "sha256": "37a0c0feebead5a0869bc6af3d1cea874acad0146a1863ce6106e1b7e5c117c6"
+      },
+      {
+        "path": "LeanWeave/GraphQL/WebSocket.html",
+        "url": "https://isavita.github.io/lean-weave/LeanWeave/GraphQL/WebSocket.html",
+        "status": 200,
+        "bytes": 12049,
+        "sha256": "4199fe7b94d8a11e3748647772e468d5235108b69438be148e6bce993d96a9b7"
+      },
+      {
+        "path": "LeanWeave/Operations/Health.html",
+        "url": "https://isavita.github.io/lean-weave/LeanWeave/Operations/Health.html",
+        "status": 200,
+        "bytes": 29079,
+        "sha256": "d28770d1410c42a0834d7dc7ecd7963fc9a580ca4de3412b5893e6869f75099e"
+      },
+      {
+        "path": "LeanNet/AtomicFlag.html",
+        "url": "https://isavita.github.io/lean-weave/LeanNet/AtomicFlag.html",
+        "status": 200,
+        "bytes": 7972,
+        "sha256": "a3b087c1e6a0baabf076bcecb804de9f7224b094b08d91a8944538e58cac23f9"
+      },
+      {
+        "path": "LeanWeave/Grpc/Service.html",
+        "url": "https://isavita.github.io/lean-weave/LeanWeave/Grpc/Service.html",
+        "status": 200,
+        "bytes": 24722,
+        "sha256": "6cc14f793fdc7839d81912b57134ae245752c7a26726b28b7bcbc05cfae0eb1a"
+      },
+      {
+        "path": "LeanWeave/Live.html",
+        "url": "https://isavita.github.io/lean-weave/LeanWeave/Live.html",
+        "status": 200,
+        "bytes": 28471,
+        "sha256": "3acc66d5e14c04e63e8e5a27545e9af030db3ac49e1ccc9df21dc592b825ec6d"
+      },
+      {
+        "path": "LeanWeavePostgres/Workflows.html",
+        "url": "https://isavita.github.io/lean-weave/LeanWeavePostgres/Workflows.html",
+        "status": 200,
+        "bytes": 21273,
+        "sha256": "7c00e1390615309ce5ad89a2dc213b7e6ec7d621f709ae6fcfbe3caa793bd7a0"
+      },
+      {
+        "path": "LeanWeaveHttp/Vault.html",
+        "url": "https://isavita.github.io/lean-weave/LeanWeaveHttp/Vault.html",
+        "status": 200,
+        "bytes": 8343,
+        "sha256": "5ec065198c316ab3f7e131035c0a93267d5a2ddc14044594bbaadd0ee25dfa24"
+      },
+      {
+        "path": "LeanWeavePlugins/Loader.html",
+        "url": "https://isavita.github.io/lean-weave/LeanWeavePlugins/Loader.html",
+        "status": 200,
+        "bytes": 8327,
+        "sha256": "de08520d2a40e2a46cbcb965da58f56f16814a003ae9ff3bd45d91f3967a67ac"
+      }
+    ],
+    "note": "Public build-info.json matches the merged implementation revision and pinned native dependency; all listed public pages returned HTTP200. This completion record and benchmark result updates change JSON metadata only."
+  },
+  "native_dependency_verification": {
+    "revision": "05733390a34012b2a388fd35bf2eb704916c30be",
+    "merge_commit": "6473c94",
+    "pull_request": "https://github.com/isavita/lean-net/pull/11",
+    "checked_at_utc": "2026-11-16T19:01:42.276738+00:00",
+    "runs": [
+      {
+        "id": 43914876566,
+        "name": "Native reactor",
+        "head": "05733390a34012b2a388fd35bf2eb704916c30be",
+        "conclusion": "success",
+        "url": "https://github.com/isavita/lean-net/actions/runs/43914876566",
+        "platforms": [
+          "ubuntu-latest",
+          "macos-latest",
+          "windows-latest"
+        ]
+      },
+      {
+        "id": 43914876562,
+        "name": "Native TLS reactor",
+        "head": "05733390a34012b2a388fd35bf2eb704916c30be",
+        "conclusion": "success",
+        "url": "https://github.com/isavita/lean-net/actions/runs/43914876562",
+        "platforms": [
+          "ubuntu-latest",
+          "macos-latest",
+          "windows-latest"
+        ]
+      }
+    ],
+    "atomic_flag_scope": "Managed external storage with lock-free C11 atomic startup/drain latches; Health dependency readiness still uses a try-lock snapshot. These native matrices do not expand the framework supported feature profiles."
+  },
+  "benchmark_evidence": [
+    {
+      "path": "benchmarks/results.json",
+      "recorded_at_utc": "2026-11-16T18:42:18.574571+00:00",
+      "source_commit": "7ec25a11f6393816a8d4bc559dabc1ed030bf51a",
+      "source_dirty": false,
+      "binary_sha256": "7ad0a1dbf2c3d1b61ed2b828e9c4505c36a0f8eaeb8923a603e3c9c3d20acde0",
+      "measurement": "Native wall time and IO.getNumHeartbeats thread-local small allocation deltas; excludes large byte buffers, native malloc, RSS, sockets and TLS. Counts include loop and IO scaffolding.",
+      "scope": "Native microbenchmark and Lean thread-local small-allocation deltas; excludes large buffers, native malloc, RSS, sockets and TLS.",
+      "recorded_source_hashes": 7
+    },
+    {
+      "path": "benchmarks/platform-results.json",
+      "recorded_at_utc": "2026-11-16T17:13:16.000447+00:00",
+      "source_commit": "0cf534071d6b2ac6b4965863c02a42607d1a90dc",
+      "source_dirty": true,
+      "binary_sha256": "3d86c40c7e799730b7937fbcefdf86819516b60e4b3f3c420e1a11694aa9eed9",
+      "measurement": "Native wall time and IO.getNumHeartbeats thread-local small allocation deltas; excludes large byte buffers, native malloc, RSS, sockets and TLS. Counts include loop and IO scaffolding.",
+      "scope": "Native microbenchmark and Lean thread-local small-allocation deltas; excludes large buffers, native malloc, RSS, sockets and TLS.",
+      "recorded_source_hashes": 10,
+      "provenance_note": "This earlier local run has a dirty flag; all 10 recorded source hashes and the measured binary still match current files. Its commit is not relabeled as the final CI revision."
+    },
+    {
+      "path": "benchmarks/http-results.json",
+      "recorded_at_utc": "2026-11-16T18:42:20.561946+00:00",
+      "source_commit": "7ec25a11f6393816a8d4bc559dabc1ed030bf51a",
+      "source_dirty": true,
+      "binary_sha256": "10554a7b3678baa677db6c6fa7de30f64039e03d336c51d11592b8b5f48bea7d",
+      "measurement": "Single Python client and server on loopback TCP, concurrency 1 per protocol, measured sequentially HTTP/1 then HTTP/2. Includes Python HTTP/HPACK parsing, flow-control ACKs, body SHA-256 validation, loop overhead and OS scheduling. Excludes TCP/settings setup, priming and warmup. No TLS, saturation, browser, remote-network, allocation or multi-client claim.",
+      "scope": "Concurrency 1, sequential HTTP1 keepalive and HTTP2 streams over real loopback TCP, no TLS; includes Python client parsing/checksums/flow-control/scheduling; no saturation or multi-client claim.",
+      "server": {
+        "application": "pages",
+        "workers": 1,
+        "address": "127.0.0.1",
+        "port": 57903,
+        "target": "/",
+        "tls": false,
+        "tcp_nodelay": true,
+        "graceful_exit_code": 0
+      },
+      "provenance_note": "The final implementation commit is recorded with source_dirty=true; the actual binary fingerprint matches. This receipt does not contain a per-source manifest."
+    }
+  ],
+  "completion_record": {
+    "kind": "metadata only",
+    "implementation_revision": "7279c9104dbbdf3dbaadb9ed27935c23f0893cf5",
+    "ci_tested_revision": "7ec25a11f6393816a8d4bc559dabc1ed030bf51a",
+    "implementation_tree": "34e52a21e91a96058e27654aec9c92db6a7d7b68",
+    "note": "The verified CI head and merged implementation have identical trees. This completion commit updates only acceptance and benchmark JSON records; it does not change the published API implementation."
+  }
 }

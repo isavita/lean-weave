@@ -1,38 +1,48 @@
 {
-  "utc": "2026-11-16T08:39:54.688527+00:00",
-  "platform": "macOS-27.2.1-arm64-arm-64bit",
+  "utc": "2026-11-16T18:42:18.574571+00:00",
+  "platform": "macOS-27.2.1-arm64-arm-64bit-Mach-O",
   "machine": "arm64",
   "processor": "arm",
   "lean": "Lean (version 4.35.0, arm64-apple-darwin24.6.0, commit eb6cafb7290e8bd5f2937522d8d804f58f02bafc, Release)",
-  "commit": "c584fdb28759f28520ec14d01fbe9bb518e6a5f1",
+  "commit": "7ec25a11f6393816a8d4bc559dabc1ed030bf51a",
   "dirty": false,
+  "source_sha256": {
+    "benchmarks/Main.lean": "5ff33534e034e314eb3c319a8b937ff2d4351dc5f8ed28adb020faf13cc42530",
+    "LeanWeave/Core.lean": "f50329b8b2262c0f0facfd94df1910c80fc4f47380b376dd5cf04687d75fd46a",
+    "LeanWeave/Router/Runtime.lean": "958f25c8c7b8f251d6934cc75dc076ef03aee8f9bbe6f8295912802735a06192",
+    "LeanWeave/Html/Basic.lean": "3f963e37c59117d7073a3baef8ede17d0d1045ebd0271d644b107fd37d263759",
+    "LeanWeave/Cache/Store.lean": "b85f8623a44069e1273e755a6789462bc20173282629677b53cc1ed28f04d5c4",
+    "scripts/benchmark.py": "9b51ebeaf602ecafb78972f7f9c786bcc3767b5269c9b57e02c22a7bda4ffb40",
+    "lake-manifest.json": "7a9fe35cecb081e2bee0634eaa2108e0368ea24dcf7fb2245b65085f0cfd7a80"
+  },
+  "binary_sha256": "7ad0a1dbf2c3d1b61ed2b828e9c4505c36a0f8eaeb8923a603e3c9c3d20acde0",
   "measurement": "Native wall time and IO.getNumHeartbeats thread-local small allocation deltas; excludes large byte buffers, native malloc, RSS, sockets and TLS. Counts include loop and IO scaffolding.",
   "samples": [
     {
       "checksum": 1588890,
       "iterations": 20000,
       "name": "compiled_html",
-      "nanoseconds": 3812917,
+      "nanoseconds": 3964875,
       "small_allocations": 20003,
-      "ns_per_iteration": 190.64585,
+      "ns_per_iteration": 198.24375,
       "small_allocations_per_iteration": 1.00015
     },
     {
       "checksum": 2548890,
       "iterations": 20000,
       "name": "decode_route_render",
-      "nanoseconds": 68602542,
+      "nanoseconds": 70360250,
       "small_allocations": 1884452,
-      "ns_per_iteration": 3430.1271,
+      "ns_per_iteration": 3518.0125,
       "small_allocations_per_iteration": 94.2226
     },
     {
       "checksum": 1360000,
       "iterations": 20000,
       "name": "fragment_cache_hit",
-      "nanoseconds": 1793167,
+      "nanoseconds": 2005334,
       "small_allocations": 120002,
-      "ns_per_iteration": 89.65835,
+      "ns_per_iteration": 100.2667,
       "small_allocations_per_iteration": 6.0001
     }
   ]
