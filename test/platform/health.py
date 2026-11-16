@@ -196,7 +196,8 @@ def main():
                     if headers['x-health-probe-pending'] == '1': pending_owners.add(headers['x-health-owner'])
                     return pending_owners == {'0', '1'}
                 wait_phase(pending, 'owner probe executions did not become pending', timeout=.7)
-                assert all_http1('startup', 200), 'startup regressed while a probe was pending'
+                assert all_http1('startup', 200), ('startup regressed while a probe was pending', diagnostics())
+                assert_phase({'live': 200, 'startup': 200})
             started = time.monotonic()
             process.send_signal(signal.CTRL_BREAK_EVENT if os.name == 'nt' else signal.SIGTERM)
             for pid in paused: os.kill(pid, signal.SIGCONT)

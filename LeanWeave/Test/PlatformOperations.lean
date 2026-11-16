@@ -151,6 +151,32 @@ private def healthDrain : IO Unit := do
   check ((← require (← probe "ready")).status == 503) "readiness dependency missing"
   let _ ← health.dependency "database" true
   check ((← require (← probe "ready")).status == 200) "ready dependencies"
+  -- A distinct runtime thread deliberately holds the dependency-state mutex.
+  -- Every probe runs before release, so startup cannot accidentally pass by
+  -- acquiring the lock after the contending publisher has finished.
+  let ⟨state, _, _⟩ := health
+  let locked ← IO.Promise.new
+  let release ← IO.Promise.new
+  let holder ← IO.asTask do
+    state.atomically do
+      locked.resolve ()
+      let _ ← IO.wait release.result?
+      pure ()
+  let _ ← IO.wait locked.result?
+  try
+    check ((← health.snapshot).isNone) "fixture holds dependency mutex on another thread"
+    for _ in [:128] do
+      check ((← require (← probe "startup")).status == 200) "startup stays initialized during dependency contention"
+      check ((← require (← probe "live")).status == 200) "liveness avoids dependency contention"
+      check ((← require (← probe "ready")).status == 503) "readiness fails closed during dependency contention"
+    check (← health.beginDrain) "drain latch publishes during dependency contention"
+  finally
+    release.resolve ()
+    match ← IO.wait holder with
+    | .ok () => pure ()
+    | .error error => throw error
+  check ((← health.snapshot).any (fun s => s.initialized && s.draining)) "monotone latches survive snapshot contention"
+  check ((← require (← probe "startup")).status == 200) "draining preserves completed startup"
   let closed ← IO.mkRef (#[] : Array String)
   let deadlines ← IO.mkRef (#[] : Array Nat)
   let runtime ← Operations.Runtime.create health #[
