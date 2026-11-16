@@ -19,7 +19,7 @@
   },
   "host": "macOS-27.2.1-arm64-arm-64bit",
   "transport": "real TCP loopback; HTTP1 and h2c; no TLS",
-  "sourceCommit": "5f6aa966b8678867719561405d656516cefe3241",
+  "sourceCommit": "0cf534071d6b2ac6b4965863c02a42607d1a90dc",
   "sourceDirty": true,
   "source_sha256": {
     "LeanWeave/Core/AppM.lean": "b431767c9eadaefcbd5f02e0cc06a6c370fcdabb07a04d889fbc0cd4cbfca801",
@@ -52,8 +52,8 @@
     "LeanWeave/Schema/DSL.lean": "64043f45b1a87b32d8dc8b14a94a6ac26d2cd54389fe18145afd5a64572023f2",
     "LeanWeave/Schema.lean": "dc3e2333ff6da9ea45e1397867b787c6025225bc8ba1c81b154ac546fe69d4a7",
     "LeanWeave/Test/ProtocolFixture.lean": "9cb3f8069e127e6529057a9681a4c4d1ff2d177f542876ca6308cf9fb08b42c4",
-    "lake-manifest.json": "d3080ee9a6cb2ec0ecfc6a040ae9355cd3b4a0523676edca888acc9d3d614fed",
-    "lakefile.toml": "1956dccb12fa31ea5044cb898d9b517443d4faeafff865101f7f9bcb3d78b9c2",
+    "lake-manifest.json": "7a9fe35cecb081e2bee0634eaa2108e0368ea24dcf7fb2245b65085f0cfd7a80",
+    "lakefile.toml": "2432e730f1e02c7913b514c1da55fb38ee4a21206699c7a7e81df6ea1a8697a2",
     "lean-toolchain": "ca5f1f601d34c49079e38d7e7041eb0f2a9c227fbc1df0f404820069a052330c",
     "scripts/protocol-browser/browser.js": "ee08304ea9ccdfe5b09af706d4655a2d9717efdc534fd334d7dd9aa519148da0",
     "scripts/protocol-browser/package-lock.json": "af06ec92b32c433b56a04261ee5897cb8e1424d9af1d956b933cbeb44e1b1f32",
@@ -63,7 +63,7 @@
     "scripts/test_protocol_compile.py": "9ddcf54ffc7acf83d9896656f289ce02cd73280a1e37c2549391eac1d7de7f2c",
     "scripts/test_protocols.py": "9da7cf99ed816025b7e293e368e2e39d84b45173340d98ac1b17d7e672a158bf"
   },
-  "lean_net_revision": "dcce82480a6985b3269a474b12b81863e6bdb115",
-  "recordedAt": "2026-11-16T16:23:17.498724+00:00",
-  "fixture_sha256": "bbdc64ea2924c02e54e8a04a1f86d93e731cb70d6967b05556c864b411e0bac0"
+  "lean_net_revision": "05733390a34012b2a388fd35bf2eb704916c30be",
+  "recordedAt": "2026-11-16T17:13:18.858734+00:00",
+  "fixture_sha256": "786456be87215dc54617d6388352bcca067a2278652ff16240bc05adc5ccb919"
 }
