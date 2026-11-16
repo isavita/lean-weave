@@ -11,7 +11,7 @@ outgoing publication was queued, not that Redis or a remote application received
 it. PubSub is at-most-once during disconnect; presence uses periodic full CRDT
 snapshots for anti-entropy. Call `adapter.tick` from native maintenance and
 `adapter.close` from shutdown. The two-process test exercises `Channel.broadcast`
-over an isolated real Redis and observes its delivery on the other node's SSE.
+over an isolated real Redis and observes delivery on the other node's WS/SSE.
 
 Create one `Client` in each reactor worker's application factory. Commands use
 numeric IPv4/IPv6 addresses, nonblocking connect/send/receive, and bounded RESP2.

@@ -8,7 +8,7 @@ open LeanWeave
 private def query (ctx : Context) (key : String) (fallback : String := "") : String :=
   ((ctx.query.find? (·.1 == key)).map (·.2)).getD fallback
 
-private def application (port : UInt16) (actor : String) : IO Server.Application := do
+private def application (httpPort port : UInt16) (actor : String) : IO Server.Application := do
   let broker ← Realtime.Broker.new { maxMessages := 128, maxMessageBytes := 32768 }
   let adapter ← Redis.PubSub.Adapter.new broker { port, channel := "leanweave:acceptance:pubsub", maxMessageBytes := 32768, reconnectMs := 10 }
   let replica ← Presence.Replica.new actor { maxEntries := 64, maxSnapshotBytes := 16384, leaseMs := 120, heartbeatMs := 20 }
@@ -47,6 +47,18 @@ private def application (port : UInt16) (actor : String) : IO Server.Application
   return {
     handler
     tickIntervalMs := 2
+    onUpgrade := fun head _ => do
+      if head.target != "/socket".toUTF8 || head.version == "HTTP/2" then return none
+      let policy : LeanNet.WebSocket.Handshake.Policy := {
+        originAllowed := fun origin => origin == some s!"http://127.0.0.1:{httpPort.toNat}".toUTF8 }
+      if let .error rejection := LeanNet.WebSocket.Handshake.acceptHTTP1 head policy then
+        return some (.reject { response := { status := rejection.status } })
+      let .ok context := Context.fromRequest {
+        method := head.method,version := head.version,target := head.target,headers := head.headers,body := ByteArray.empty }
+        | return some (.reject { response := { status := 400 } })
+      let .ok callbacks ← channel.webSocket context "room" (keepAliveMs := 30)
+        | return some (.reject { response := { status := 503 } })
+      return some (← LeanNet.WebSocket.Server.acceptHTTP1 head policy callbacks)
     onTick := fun now => do
       if now < (← partitionUntil.get) then return
       adapter.tick now
@@ -57,6 +69,6 @@ def main (args : List String) : IO Unit := do
   let some http := args[0]?.bind String.toNat? | throw (IO.userError "HTTP_PORT REDIS_PORT ACTOR")
   let some redis := args[1]?.bind String.toNat? | throw (IO.userError "HTTP_PORT REDIS_PORT ACTOR")
   let actor := args[2]?.getD "node"
-  Server.serveApplications (fun _ use => do use (← application redis.toUInt16 actor)) {
+  Server.serveApplications (fun _ use => do use (← application http.toUInt16 redis.toUInt16 actor)) {
     port := http.toUInt16
     net := { workers := 1, shutdownDrainMs := 100 } }

@@ -2,18 +2,19 @@
   "passed": true,
   "platform": "macOS-27.2.1-arm64-arm-64bit-Mach-O",
   "native_processes": 2,
-  "tests": 2,
+  "tests": 3,
   "actual_channel_broadcast_via_redis": true,
   "receipt_is_queue_admission_not_delivery_ack": true,
   "sse_remote_delivery_observed": true,
   "presence_partition_rejoin_leave": true,
+  "websocket_remote_delivery_observed": true,
   "persistent_service_started": false,
   "sources_sha256": {
     "LeanWeave/Realtime/Channel.lean": "f6ea470c94247509027ffb0c0cdd215716a558e1f18439a0896b3c4972bef4cb",
     "LeanWeave/Realtime/PubSub.lean": "8d2a769ee6583b55a1dcc6a3793927d163ea186a27417bad4ece9c24b98612e6",
     "LeanWeave/Presence.lean": "afef5a6d12154c25646f223a41168ed089aeb47c94effc73a5588e2073b8f3ec",
     "adapters/redis/LeanWeaveRedis/PubSub.lean": "a08edcd63b7029f5acb8454643341c78cddb7bf330dc28c2090ca5169f2bdbce",
-    "adapters/redis/test/PubSubFixture.lean": "68db8f885e528499fbed35cf1b2ab7fa02530b47114cc598648dd2a5b048d2b8",
-    "adapters/redis/test/test_pubsub_presence.py": "8f0250c22fb8b76910a53e4331e3180ae1987e4c7c6d18a940f83c72bcdf806f"
+    "adapters/redis/test/PubSubFixture.lean": "8551f7efd7f6719ff02203aa9a8131d3d6e42da3fd9d9e78eace879b2e7ff9f7",
+    "adapters/redis/test/test_pubsub_presence.py": "0f4b3f4a2d4d8134c57f1a251669f0d51f203ebe356dfeea093ed6f6ddab1edd"
   }
 }

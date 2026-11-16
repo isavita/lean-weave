@@ -3,6 +3,7 @@
 import http.client
 import json
 import hashlib
+import os
 import platform
 from pathlib import Path
 import shutil
@@ -16,6 +17,10 @@ import unittest
 from urllib.parse import urlencode
 
 ROOT = Path(__file__).resolve().parents[1]
+SOURCE = ROOT.parents[1]
+NET = Path(os.environ.get('LEAN_NET_ROOT', SOURCE / '.lake/packages/lean-net'))
+sys.path.insert(0, str(NET / 'test'))
+from test_websocket import read_ws, websocket_frame
 BINARY = ROOT / '.lake/build/bin' / ('weave-redis-pubsub-fixture.exe' if sys.platform == 'win32' else 'weave-redis-pubsub-fixture')
 
 
@@ -119,6 +124,32 @@ class DistributedRealtime(unittest.TestCase):
         self.assertEqual(self.members(self.b), ['bob'])
         self.assertGreaterEqual(json.loads(self.get(self.b, '/stats'))['reconnects'], 2)
 
+    def test_two_node_channel_websocket_broadcast(self):
+        with socket.create_connection(('127.0.0.1', self.b), timeout=3) as peer:
+            peer.sendall((f'GET /socket HTTP/1.1\r\nHost: 127.0.0.1:{self.b}\r\nConnection: Upgrade\r\n'
+                          'Upgrade: websocket\r\nSec-WebSocket-Version: 13\r\n'
+                          'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n'
+                          f'Origin: http://127.0.0.1:{self.b}\r\n\r\n').encode())
+            headers = b''
+            while not headers.endswith(b'\r\n\r\n'):
+                chunk = peer.recv(1)
+                self.assertTrue(chunk, 'WebSocket handshake closed without headers')
+                headers += chunk
+                self.assertLess(len(headers), 16384)
+            self.assertIn(b'101', headers.split(b'\r\n')[0])
+            receipt = json.loads(self.get(self.a, '/broadcast', value='over-websocket'))
+            self.assertEqual(receipt, {'queued': True, 'recipients': None})
+            for _ in range(20):
+                opcode, data = read_ws(peer)
+                opcode &= 0x0f
+                if opcode == 9:
+                    peer.sendall(websocket_frame(10, data)); continue
+                self.assertEqual(opcode, 1)
+                self.assertEqual(json.loads(data), {'topic':'room','event':'message','payload':'over-websocket'})
+                peer.sendall(websocket_frame(8, (1000).to_bytes(2, 'big')))
+                break
+            else: self.fail('remote WebSocket publication never arrived')
+
 
 if __name__ == '__main__':
     result = unittest.main(exit=False).result
@@ -132,6 +163,7 @@ if __name__ == '__main__':
         'tests': result.testsRun, 'actual_channel_broadcast_via_redis': True,
         'receipt_is_queue_admission_not_delivery_ack': True,
         'sse_remote_delivery_observed': True, 'presence_partition_rejoin_leave': True,
+        'websocket_remote_delivery_observed': True,
         'persistent_service_started': False,
         'sources_sha256': {str(p.relative_to(source)): hashlib.sha256(p.read_bytes()).hexdigest() for p in files}
     }, indent=2) + '\n')
