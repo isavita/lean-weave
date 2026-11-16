@@ -10,6 +10,12 @@ structure Limits where
   maxParts : Nat := 32
   maxPartHeaderBytes : Nat := 4096
   maxFileBytes : Nat := 512 * 1024
+  /-- Digits in either numeric mantissa (integer+fraction) or exponent field,
+      including leading zeroes. Checked lexically before Lean's JSON parser. -/
+  maxNumberDigits : Nat := 128
+  /-- Absolute explicit decimal exponent. The default includes IEEE754 normal
+      and subnormal spellings while bounding Lean's arbitrary-size expansion. -/
+  maxExponentMagnitude : Nat := 1024
   deriving Repr
 
 private def checkSize (bytes : ByteArray) (limits : Limits) : Except AppError Unit :=
@@ -20,9 +26,56 @@ def form (bytes : ByteArray) (limits : Limits := {}) : Except AppError (Array (S
   let some text := String.fromUTF8? bytes | throw { status := 400, message := "form must be UTF-8" }
   (decodePairs text limits.maxFields limits.maxFieldBytes).mapError fun message => { status := 400, message }
 
-/-- Depth and byte limits are checked before invoking the JSON parser. -/
+/-- Numeric preflight only; grammar remains Lean.Json.parse's responsibility.
+This also permits non-HTTP decoders to share the same allocation bounds. -/
+def checkJsonNumbers (bytes : ByteArray) (limits : Limits := {}) : Except AppError Unit := do
+  checkSize bytes limits
+  if limits.maxNumberDigits == 0 || limits.maxNumberDigits > 4096 || limits.maxExponentMagnitude > 4096 then
+    throw { status := 500, message := "invalid JSON numeric limits" }
+  let mut inString := false
+  let mut escaped := false
+  let mut index := 0
+  while index < bytes.size do
+    let b := bytes[index]!
+    if inString then
+      if escaped then escaped := false
+      else if b == 92 then escaped := true
+      else if b == 34 then inString := false
+      index := index + 1
+    else if b == 34 then
+      inString := true
+      index := index + 1
+    else if b == 45 || (b >= 48 && b <= 57) then
+      let mut mantissaDigits := 0
+      let mut exponentDigits := 0
+      let mut exponent := 0
+      let mut inExponent := false
+      -- Include malformed numeric punctuation too: rejecting its oversized
+      -- prefix must happen before the parser can expand a valid prefix.
+      while index < bytes.size && ((bytes[index]! >= 48 && bytes[index]! <= 57) ||
+          [43,45,46,69,101].contains bytes[index]!.toNat) do
+        let current := bytes[index]!
+        if current == 69 || current == 101 then inExponent := true
+        else if current >= 48 && current <= 57 then
+          if inExponent then
+            exponentDigits := exponentDigits + 1
+            if exponentDigits > limits.maxNumberDigits then
+              throw { status := 413, message := "JSON exponent digit limit exceeded" }
+            exponent := exponent * 10 + current.toNat - 48
+            if exponent > limits.maxExponentMagnitude then
+              throw { status := 413, message := "JSON exponent magnitude limit exceeded" }
+          else
+            mantissaDigits := mantissaDigits + 1
+            if mantissaDigits > limits.maxNumberDigits then
+              throw { status := 413, message := "JSON mantissa digit limit exceeded" }
+        index := index + 1
+    else index := index + 1
+
+/-- Byte, depth, element and numeric allocation limits are checked before
+invoking Lean's JSON parser, which can otherwise expand a tiny `1eN` into 10^N. -/
 def json (bytes : ByteArray) (limits : Limits := {}) : Except AppError Lean.Json := do
   checkSize bytes limits
+  checkJsonNumbers bytes limits
   let some text := String.fromUTF8? bytes | throw { status := 400, message := "JSON must be UTF-8" }
   let mut depth := 0
   let mut inString := false
