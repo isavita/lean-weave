@@ -1,0 +1,23 @@
+{
+  "native": true,
+  "passed": true,
+  "independent_reference": "Python hashlib/hmac/base64",
+  "vectors": 119,
+  "seed": "0xC0DEC0DE",
+  "message_bytes": [
+    0,
+    65536
+  ],
+  "key_lengths": [
+    0,
+    1,
+    20,
+    32,
+    63,
+    64,
+    65,
+    128,
+    256
+  ],
+  "source_sha256": "c9493e2e70988251c21d930ef32b626985664ff13be7a20e7994e4ba8db93997"
+}

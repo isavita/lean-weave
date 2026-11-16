@@ -108,9 +108,10 @@ private def captures (row : Row) : Array (String × CaptureType) := row.segments
   | .rest name => some (name, .text)
 
 private def routeSyntax (row : Row) : CommandElabM (TSyntax `term) := do
-  let ctx := mkIdent `__weave_context
+  let ctx := mkIdent (← liftCoreM (mkFreshUserName `__weave_context))
   let cs := captures row
-  let args := cs.mapIdx fun i _ => mkIdent (Name.mkSimple s!"__weave_capture_{i}")
+  let args ← cs.mapIdxM fun i _ =>
+    return mkIdent (← liftCoreM (mkFreshUserName (Name.mkSimple s!"__weave_capture_{i}")))
   let mut body ← `($(row.target) $args* $ctx)
   for i in (List.range cs.size).reverse do
     let (name, type) := cs[i]!
@@ -129,8 +130,15 @@ private def reverseCommand (router : Ident) (row : Row) : CommandElabM (TSyntax 
   let cs := captures row
   let mut binders : Array (TSyntax ``Lean.Parser.Term.bracketedBinder) := #[]
   let mut pairs : Array (TSyntax `term) := #[]
+  -- Reversal depends only on route metadata. In particular it must not require
+  -- the section parameters captured by an application handler or middleware.
+  let segments ← row.segments.mapM segmentSyntax
+  let hostRule ← hostSyntax row.hostRule
+  let metadata ← `(({ routes := #[({
+      name := $(quote row.name.toString), method := $(quote row.method), path := $(quote row.path),
+      «host» := $hostRule, pattern := #[$segments,*], handler := fun _ => pure {} } : Route)] } : LeanWeave.Router))
   for (name, type) in cs do
-    let arg := mkIdent (Name.mkSimple name)
+    let arg := mkIdent (← liftCoreM (mkFreshUserName (Name.mkSimple name)))
     let ty ← match type with | .nat => `(Nat) | .int => `(Int) | .text => `(String)
     binders := binders.push (← `(bracketedBinderF| ($arg : $ty)))
     let ctor := mkIdent (match type with
@@ -139,7 +147,7 @@ private def reverseCommand (router : Ident) (row : Row) : CommandElabM (TSyntax 
       | .text => ``LeanWeave.CaptureValue.text)
     pairs := pairs.push (← `(($(quote name), $ctor $arg)))
   `(def $helper $binders* (query : Array (String × String) := #[]) : Except String String :=
-      LeanWeave.Router.url $router $(quote row.name.toString) #[$pairs,*] query)
+      LeanWeave.Router.url $metadata $(quote row.name.toString) #[$pairs,*] query)
 
 @[command_elab weaveRoutes] def elabWeaveRoutes : CommandElab := fun stx => do
   let `(weave_routes $router:ident where { $entries:weave_route,* }) := stx

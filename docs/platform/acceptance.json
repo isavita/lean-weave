@@ -1,0 +1,910 @@
+{
+  "scope": "Requirement-scoped local acceptance for all 27 items in the original advanced application-platform checklist. Existing core/cache support is retained. locally_verified records implementation and the linked local evidence within each explicit supported profile; it does not mean final framework CI or API documentation publication has completed.",
+  "source_attachment": "96dc41fa-ca69-48d3-85c2-d883496eaafd/pasted-text-1.txt",
+  "items": [
+    {
+      "id": "P01",
+      "category": "🔄 Real-Time & Pub/Sub (The Phoenix Tier)",
+      "feature": "Channel & PubSub Abstraction",
+      "requirement": "A subscription model layered over WebSockets and SSE. Implement local and distributed adapters (e.g., Redis or Erlang-style PG2) for broadcasting messages across nodes.",
+      "owner": "realtime",
+      "status": "locally_verified",
+      "implementation": [
+        "LeanWeave/Realtime/PubSub.lean",
+        "LeanWeave/Realtime/Channel.lean",
+        "adapters/redis/LeanWeaveRedis/PubSub.lean"
+      ],
+      "checks": [
+        "weave-stream-test",
+        "adapters/redis/test/test_pubsub_presence.py"
+      ],
+      "evidence": [
+        "adapters/redis/test/pubsub-presence-result.json"
+      ],
+      "scope_and_limits": "Common typed Channel.broadcast now selects local or Redis Publisher. Real two-process WS and SSE delivery is observed; Publication is queue admission, never a remote delivery acknowledgement. Redis transport is ephemeral/at-most-once and deployment namespace/auth boundaries remain explicit.",
+      "verification": {
+        "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
+        "platform_ci": "pending",
+        "api_docs_publication": "pending"
+      }
+    },
+    {
+      "id": "P02",
+      "category": "🔄 Real-Time & Pub/Sub (The Phoenix Tier)",
+      "feature": "Presence Tracking",
+      "requirement": "A CRDT-backed (Conflict-free Replicated Data Type) mechanism to track which users are online or connected to a given topic across a cluster, updating in real-time as users join or disconnect.",
+      "owner": "realtime",
+      "status": "locally_verified",
+      "implementation": [
+        "LeanWeave/Presence.lean"
+      ],
+      "checks": [
+        "weave-stream-test",
+        "adapters/redis/test/test_pubsub_presence.py"
+      ],
+      "evidence": [
+        "adapters/redis/test/pubsub-presence-result.json"
+      ],
+      "scope_and_limits": "Dotted observed-remove state and periodic anti-entropy, per-connection membership, partition expiry/rejoin and stale-leave non-resurrection are exercised. Actor IDs must be incarnation-unique; causal history is finite and rejects overflow rather than forgetting tombstones.",
+      "verification": {
+        "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
+        "platform_ci": "pending",
+        "api_docs_publication": "pending"
+      }
+    },
+    {
+      "id": "P03",
+      "category": "🔄 Real-Time & Pub/Sub (The Phoenix Tier)",
+      "feature": "LiveView-style Interactive Components",
+      "requirement": "Server-rendered, stateful components that send HTML diffs over WebSockets (or SSE with fallback), eliminating the need for heavy frontend state management.",
+      "owner": "realtime",
+      "status": "locally_verified",
+      "implementation": [
+        "LeanWeave/Live.lean",
+        "LeanWeave/Live/Client.lean"
+      ],
+      "checks": [
+        "test/test_realtime.py",
+        "test/browser_realtime.py",
+        "test/browser_realtime.cjs"
+      ],
+      "evidence": [
+        "test/evidence/realtime-browser.json",
+        "docs/platform/evidence/realtime-browser-repro.json",
+        "docs/platform/evidence/realtime-webkit-final.json"
+      ],
+      "scope_and_limits": "Typed server state and keyed HTML patches use independent view IDs bound to one stable HttpOnly browser-owner cookie. Real same-context tabs retain independent WebSocket state, and SSE fallback does not replace another view. Owner-wide revocation, per-owner/global capacity and CSRF/origin checks are exercised. State stays on its reactor owner; transparent cross-worker/node state migration is not implemented.",
+      "verification": {
+        "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
+        "platform_ci": "pending",
+        "api_docs_publication": "pending"
+      }
+    },
+    {
+      "id": "P04",
+      "category": "🔄 Real-Time & Pub/Sub (The Phoenix Tier)",
+      "feature": "Streaming & Multipart Responses",
+      "requirement": "Native support for `Transfer-Encoding: chunked` (already in lean-net) exposed via an async generator/stream API for LLM token streaming or large file exports.",
+      "owner": "realtime",
+      "status": "locally_verified",
+      "implementation": [
+        "LeanWeave/Core/Stream.lean",
+        "LeanWeave/Stream.lean",
+        "LeanWeave/Core/Server.lean",
+        "LeanWeave/Test/Generator.lean"
+      ],
+      "checks": [
+        "weave-stream-test",
+        "test/test_realtime.py",
+        "lean-net:test/test_application_streams.py",
+        "LeanWeave.Test.Generator.run via weave-platform-test"
+      ],
+      "evidence": [
+        "docs/platform/platform-result.json"
+      ],
+      "scope_and_limits": "Stream.unfoldM runs typed State → budget → AppM transitions with at most one execution and fixed state/operation/chunk reservations. No step starts at zero output credit; an admitted await still progresses and enforces its deadlines at zero credit, retaining at most one bounded chunk. Cancellation, failures, terminal trailers and HEAD-without-production close exactly once. Multipart header bytes are checked before concatenation. Native HTTP1 chunking/order and independent HTTP2 flow-controlled completion are exercised; callbacks and owned buffers remain on the worker. User callbacks must be nonblocking and stateBytes must conservatively include retained closure state.",
+      "verification": {
+        "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
+        "platform_ci": "pending",
+        "api_docs_publication": "pending"
+      }
+    },
+    {
+      "id": "P05",
+      "category": "⚙️ Background Jobs & Workflows",
+      "feature": "Job Queues & Workers",
+      "requirement": "A native job system (sync, in-memory, or DB-backed) with typed payloads, retries with exponential backoff, and dead-letter queues.",
+      "owner": "jobs",
+      "status": "locally_verified",
+      "implementation": [
+        "LeanWeave/Jobs/Types.lean",
+        "LeanWeave/Jobs/Local.lean",
+        "LeanWeave/Jobs/Worker.lean",
+        "adapters/postgres/LeanWeavePostgres/Jobs.lean"
+      ],
+      "checks": [
+        "weave-jobs-test",
+        "adapters/postgres/test/jobs_cluster.py"
+      ],
+      "evidence": [
+        "docs/platform/jobs-result.json"
+      ],
+      "scope_and_limits": "Sync, bounded dedicated workers, typed payloads, retries/backoff/dead letters, fencing and real multiprocess crash recovery exist. At-least-once effects require idempotency or application DB transactions. Local memory queue durability is not claimed.",
+      "verification": {
+        "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
+        "platform_ci": "pending",
+        "api_docs_publication": "pending"
+      }
+    },
+    {
+      "id": "P06",
+      "category": "⚙️ Background Jobs & Workflows",
+      "feature": "Cron Scheduling",
+      "requirement": "A declarative DSL for scheduling periodic tasks (e.g., `@cron \"0 * * * *\"`) that hooks into the reactor's timer wheel.",
+      "owner": "jobs",
+      "status": "locally_verified",
+      "implementation": [
+        "LeanWeave/Jobs/Cron.lean",
+        "LeanWeave/Jobs/Lifecycle.lean"
+      ],
+      "checks": [
+        "LeanWeave/Jobs/CronTest.lean",
+        "adapters/postgres/test/JobsMain.lean lifecycle"
+      ],
+      "evidence": [
+        "docs/platform/jobs-result.json"
+      ],
+      "scope_and_limits": "cron! is elaboration-checked, UTC, bounded catch-up/backpressure. Scheduler.application hooks into native onTick maintenance and real timer dispatch is tested. It uses a native timer pulse with nextDue, not a separate unbounded timer task per schedule.",
+      "verification": {
+        "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
+        "platform_ci": "pending",
+        "api_docs_publication": "pending"
+      }
+    },
+    {
+      "id": "P07",
+      "category": "⚙️ Background Jobs & Workflows",
+      "feature": "Workflow Engine",
+      "requirement": "State machines for multi-step background processes (e.g., payment processing, user onboarding), with compensation logic for failures.",
+      "owner": "jobs",
+      "status": "locally_verified",
+      "implementation": [
+        "LeanWeave/Workflow/Types.lean",
+        "LeanWeave/Workflow/Local.lean",
+        "adapters/postgres/LeanWeavePostgres/Workflows.lean"
+      ],
+      "checks": [
+        "LeanWeave/Workflow/Test.lean",
+        "adapters/postgres/test/jobs_cluster.py"
+      ],
+      "evidence": [
+        "docs/platform/jobs-result.json"
+      ],
+      "scope_and_limits": "Bounded validated DAG, persistent state transitions, reverse-topological saga compensation, cancellation and explicit failed-compensation retry exist. Whole-DAG capacity reservations prevent later steps/compensations from deadlocking behind full admission.",
+      "verification": {
+        "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
+        "platform_ci": "pending",
+        "api_docs_publication": "pending"
+      }
+    },
+    {
+      "id": "P08",
+      "category": "⚙️ Background Jobs & Workflows",
+      "feature": "Transactional Outbox",
+      "requirement": "A pattern to ensure database writes and job publishing happen atomically, preventing dual-write anomalies.",
+      "owner": "jobs",
+      "status": "locally_verified",
+      "implementation": [
+        "adapters/postgres/LeanWeavePostgres/Jobs.lean",
+        "adapters/postgres/LeanWeavePostgres/Workflows.lean"
+      ],
+      "checks": [
+        "adapters/postgres/test/jobs_cluster.py"
+      ],
+      "evidence": [
+        "docs/platform/jobs-result.json"
+      ],
+      "scope_and_limits": "Actual business write plus enqueueOn share one transaction; rollback/commit tested. A terminal-job trigger records transition events in the ACK transaction; a process killed after ACK recovers dependent publishing from the durable outbox.",
+      "verification": {
+        "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
+        "platform_ci": "pending",
+        "api_docs_publication": "pending"
+      }
+    },
+    {
+      "id": "P09",
+      "category": "🏢 Multi-Tenancy & Data Isolation",
+      "feature": "Tenant Resolution Middleware",
+      "requirement": "Extract the tenant from subdomain, path, JWT claim, or header, and thread it through the `Context` transparently.",
+      "owner": "root",
+      "status": "locally_verified",
+      "implementation": [
+        "LeanWeave/Tenant/Basic.lean",
+        "LeanWeave/Tenant/Jwt.lean",
+        "LeanWeave/Security/Jwt.lean"
+      ],
+      "checks": [
+        "LeanWeave/Test/PlatformSecurity.lean",
+        "scripts/test_platform_compile.py"
+      ],
+      "evidence": [
+        "docs/platform/platform-result.json"
+      ],
+      "scope_and_limits": "Header/path/subdomain/verified JWT sources feed Context; agreement and explicit authorization are required. JWT profile is HS256 with issuer/audience/expiry checks, not arbitrary unverified claim extraction.",
+      "verification": {
+        "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
+        "platform_ci": "pending",
+        "api_docs_publication": "pending"
+      }
+    },
+    {
+      "id": "P10",
+      "category": "🏢 Multi-Tenancy & Data Isolation",
+      "feature": "Row-Level Security (RLS) Hooks",
+      "requirement": "Automatic injection of `tenant_id` into SQL queries or a proof-based guarantee that a request cannot query data outside its tenant.",
+      "owner": "root",
+      "status": "locally_verified",
+      "implementation": [
+        "LeanWeave/Tenant/Sql.lean",
+        "adapters/postgres/LeanWeavePostgres/Tenant.lean",
+        "adapters/postgres/LeanWeavePostgres/Pool.lean"
+      ],
+      "checks": [
+        "adapters/postgres/test/tenant_compile.py",
+        "adapters/postgres/test/tenant_cluster.py"
+      ],
+      "evidence": [
+        "adapters/postgres/test/tenant-result.json"
+      ],
+      "scope_and_limits": "Private tenant-indexed commands inject predicates/insert columns. Scoped transactions use SET LOCAL plus real restrictive FORCE RLS under a non-superuser without BYPASSRLS. Escape/reborrow and same-physical-connection reset are tested. General raw Pool.query remains an explicitly trusted lower-level API.",
+      "verification": {
+        "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
+        "platform_ci": "pending",
+        "api_docs_publication": "pending"
+      }
+    },
+    {
+      "id": "P11",
+      "category": "🏢 Multi-Tenancy & Data Isolation",
+      "feature": "Per-Tenant Configuration",
+      "requirement": "Override feature flags, rate limits, cache rules, and branding dynamically per tenant without code changes.",
+      "owner": "root",
+      "status": "locally_verified",
+      "implementation": [
+        "LeanWeave/Tenant/Config.lean",
+        "LeanWeave/Tenant/Brand.lean",
+        "LeanWeave/Cache/Response.lean",
+        "adapters/redis/LeanWeaveRedis/Cache.lean"
+      ],
+      "checks": [
+        "LeanWeave/Test/PlatformSecurity.lean",
+        "LeanWeave/Test/PlatformOperations.lean",
+        "LeanWeave/Tenant/ConfigTest.lean"
+      ],
+      "evidence": [
+        "docs/platform/platform-result.json"
+      ],
+      "scope_and_limits": "Runtime snapshots drive flags/rates/cache/branding without rebuilding pipelines. Revision watermark and canonical fingerprint now prevent remove/recreate and restart stale reuse. Store is process-shared; distributed configuration propagation is not implicit.",
+      "verification": {
+        "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
+        "platform_ci": "pending",
+        "api_docs_publication": "pending"
+      }
+    },
+    {
+      "id": "P12",
+      "category": "🚩 Feature Flags & Experimentation",
+      "feature": "Deterministic Percentage Rollouts",
+      "requirement": "Sticky bucketing based on user ID or session ID, ensuring a user sees the same variant across requests.",
+      "owner": "root",
+      "status": "locally_verified",
+      "implementation": [
+        "LeanWeave/Feature/Basic.lean"
+      ],
+      "checks": [
+        "LeanWeave/Test/PlatformSecurity.lean"
+      ],
+      "evidence": [
+        "docs/platform/platform-result.json"
+      ],
+      "scope_and_limits": "SHA256 length-delimited bucketing uses authenticated principal, verified session/subject or an explicitly documented anonymous tenant cohort. It is deterministic and sticky, not a claim that anonymous identity exists without a session.",
+      "verification": {
+        "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
+        "platform_ci": "pending",
+        "api_docs_publication": "pending"
+      }
+    },
+    {
+      "id": "P13",
+      "category": "🚩 Feature Flags & Experimentation",
+      "feature": "Kill Switches",
+      "requirement": "Per-flag global overrides to disable features instantly in production.",
+      "owner": "root",
+      "status": "locally_verified",
+      "implementation": [
+        "LeanWeave/Feature/Basic.lean"
+      ],
+      "checks": [
+        "LeanWeave/Test/PlatformSecurity.lean",
+        "LeanWeave/Test/PlatformOperations.lean"
+      ],
+      "evidence": [
+        "docs/platform/platform-result.json"
+      ],
+      "scope_and_limits": "Global disable takes precedence over tenant/audience overrides for all consumers sharing the process Store and affects subsequent requests. No deployment-wide instantaneous cross-node configuration delivery is claimed.",
+      "verification": {
+        "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
+        "platform_ci": "pending",
+        "api_docs_publication": "pending"
+      }
+    },
+    {
+      "id": "P14",
+      "category": "🚩 Feature Flags & Experimentation",
+      "feature": "Audit Trails",
+      "requirement": "Log every flag mutation (who changed what, when) for compliance and debugging.",
+      "owner": "root",
+      "status": "locally_verified",
+      "implementation": [
+        "LeanWeave/Feature/Basic.lean",
+        "LeanWeave/Tenant/Config.lean"
+      ],
+      "checks": [
+        "LeanWeave/Tenant/ConfigTest.lean",
+        "LeanWeave/Test/PlatformOperations.lean"
+      ],
+      "evidence": [
+        "docs/platform/platform-result.json"
+      ],
+      "scope_and_limits": "Feature definitions and tenant configuration set/remove now atomically append actor/time/full before-and-after snapshots. Full count/byte ledgers fail closed. Acknowledgement requires external persistence; this closes the previously unaudited tenant flag override mutation path.",
+      "verification": {
+        "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
+        "platform_ci": "pending",
+        "api_docs_publication": "pending"
+      }
+    },
+    {
+      "id": "P15",
+      "category": "📡 Protocol Extensions (GraphQL, gRPC, SSE)",
+      "feature": "GraphQL Subscriptions",
+      "requirement": "WebSocket-based GraphQL execution with real-time subscription support, potentially reusing the Channel/PubSub layer.",
+      "owner": "protocols",
+      "status": "locally_verified",
+      "implementation": [
+        "LeanWeave/GraphQL/Schema.lean",
+        "LeanWeave/GraphQL/Execution.lean",
+        "LeanWeave/GraphQL/HTTP.lean",
+        "LeanWeave/GraphQL/WebSocket.lean"
+      ],
+      "checks": [
+        "weave-graphql-test",
+        "test/test_graphql.py",
+        "test/graphql-client/acceptance.mjs"
+      ],
+      "evidence": [
+        "test/evidence/graphql-clients.json"
+      ],
+      "scope_and_limits": "Typed query, ordered mutation, introspection and graphql-transport-ws subscription execution use cooperative AppM operations and local PubSub. Official GraphQL.js introspection/buildClientSchema/assertValidSchema and graphql-ws mutation broadcasts/completion are exercised. This bounded profile uses finite closed value objects, enums/scalars/arrays/nullability; nested fields project values rather than run independent asynchronous resolvers. Interfaces, unions, recursive named schemas, custom executable directives, SDL construction, APQ, defer/stream and federation are not implemented. Validation covers the selected operation. The final numeric-parser changes are covered by current-source native/wire and official-client reruns; final platform CI remains pending.",
+      "verification": {
+        "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
+        "platform_ci": "pending",
+        "api_docs_publication": "pending"
+      }
+    },
+    {
+      "id": "P16",
+      "category": "📡 Protocol Extensions (GraphQL, gRPC, SSE)",
+      "feature": "gRPC & gRPC-Web",
+      "requirement": "Native support for Protobuf schema parsing, unary and streaming RPCs, and gRPC-Web on plain HTTP/1.1+.",
+      "owner": "protocols",
+      "status": "locally_verified",
+      "implementation": [
+        "LeanWeave/Protobuf/Descriptor.lean",
+        "LeanWeave/Protobuf/Compiler.lean",
+        "LeanWeave/Protobuf/Wire.lean",
+        "LeanWeave/Grpc/Service.lean"
+      ],
+      "checks": [
+        "scripts/test_protocol_compile.py",
+        "scripts/test_protocols.py",
+        "scripts/test_grpc_web_browser.py"
+      ],
+      "evidence": [
+        "docs/platform/evidence/protocols-compile.json",
+        "docs/platform/evidence/protocols-wire.json",
+        "docs/platform/evidence/grpc-web-browser.json",
+        "docs/platform/evidence/grpc-web-webkit-final.json"
+      ],
+      "scope_and_limits": "Native bounded proto3 parsing/code generation/codecs and unary, server-, client- and bidirectional-streaming RPCs interoperate with official grpcio/protobuf. Duplex output before request half-close,480 KB flow control, deadline/cancel, cardinality, framing and trailer errors are exercised. gRPC-Web binary/text unary and server streaming use real HTTP1/HTTP2 clients and an official browser client. The descriptor profile is self-contained; imported type resolution, proto2/editions/reflection and compressed messages are not implemented. Client/bidirectional streaming are native gRPC HTTP2 features, not a claim about the browser gRPC-Web protocol. Current-source compile/wire and official browser client reruns pass in both Chromium and WebKit; final platform CI remains pending.",
+      "verification": {
+        "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
+        "platform_ci": "pending",
+        "api_docs_publication": "pending"
+      }
+    },
+    {
+      "id": "P17",
+      "category": "📡 Protocol Extensions (GraphQL, gRPC, SSE)",
+      "feature": "SSE (Server-Sent Events)",
+      "requirement": "A first-class `SSE` response type with keep-alive, automatic reconnect handling, and event ID tracking.",
+      "owner": "realtime",
+      "status": "locally_verified",
+      "implementation": [
+        "LeanWeave/SSE.lean",
+        "LeanWeave/Live/Client.lean"
+      ],
+      "checks": [
+        "weave-stream-test",
+        "test/test_realtime.py"
+      ],
+      "evidence": [
+        "test/evidence/realtime-browser.json",
+        "docs/platform/evidence/realtime-browser-repro.json",
+        "docs/platform/evidence/realtime-webkit-final.json"
+      ],
+      "scope_and_limits": "First-class SSE body, safe event fields, retry hints, keepalive, IDs, bounded replay and explicit replay-gap reset are implemented. Browser EventSource supplies reconnect mechanics; server Last-Event-ID handling is wire tested.",
+      "verification": {
+        "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
+        "platform_ci": "pending",
+        "api_docs_publication": "pending"
+      }
+    },
+    {
+      "id": "P18",
+      "category": "🔭 Deep Observability & Operations",
+      "feature": "OpenTelemetry Integration",
+      "requirement": "W3C `traceparent` propagation, automatic spans for DB queries, external HTTP calls, and job execution, with OTLP export.",
+      "owner": "root",
+      "status": "locally_verified",
+      "implementation": [
+        "LeanWeave/Observability/Trace.lean",
+        "LeanWeave/Observability/Jobs.lean",
+        "LeanWeave/Observability/Export.lean",
+        "adapters/postgres/LeanWeavePostgres/Pool.lean",
+        "adapters/http/LeanWeaveHttp/Client.lean",
+        "adapters/http/LeanWeaveHttp/Otlp.lean"
+      ],
+      "checks": [
+        "test/platform/external.py",
+        "integration/platform/Main.lean",
+        "LeanWeave/Test/PlatformOperations.lean"
+      ],
+      "evidence": [
+        "docs/platform/external-result.json",
+        "adapters/http/test/wire-result.json",
+        "docs/platform/platform-result.json"
+      ],
+      "scope_and_limits": "Real official OpenTelemetry Collector receives request/SQL/HTTP/job spans with W3C parent propagation and no SQL parameters. Owner-local SQL and HTTP pools instrument their actual operations; job spans surround actual execution. Span inputs are bounded before retention and stream finish/cancel closes spans once. Export is bounded OTLP HTTP JSON traces with at-least-once retries, not an all-signals OpenTelemetry SDK. Strict HTTPS client trust is preloaded from a bounded CA PEM at startup on supported OpenSSL-compatible curl; operating-system trust work requires explicit systemTrust opt-in. H1/H2 TLS, source-file removal after preload, trust/hostname failure, operation limits and cancel are wire-tested.",
+      "verification": {
+        "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
+        "platform_ci": "pending",
+        "api_docs_publication": "pending"
+      }
+    },
+    {
+      "id": "P19",
+      "category": "🔭 Deep Observability & Operations",
+      "feature": "Structured Logging with Sampling",
+      "requirement": "Context-aware logging (request ID, tenant, user) with dynamic sampling rates to reduce noise in high-traffic environments.",
+      "owner": "root",
+      "status": "locally_verified",
+      "implementation": [
+        "LeanWeave/Observability/Logging.lean",
+        "LeanWeave/Observability/File.lean"
+      ],
+      "checks": [
+        "LeanWeave/Test/PlatformOperations.lean"
+      ],
+      "evidence": [
+        "docs/platform/platform-result.json"
+      ],
+      "scope_and_limits": "Bounded context-correlated JSON records include request ID, tenant and verified principal, with dynamic sampling/level, redaction and a dedicated asynchronous file sink. Error preservation still obeys explicit byte/count bounds and minimum level; overload/drop accounting is observable. A blocking kernel file write/flush cannot be hard-preempted.",
+      "verification": {
+        "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
+        "platform_ci": "pending",
+        "api_docs_publication": "pending"
+      }
+    },
+    {
+      "id": "P20",
+      "category": "🔭 Deep Observability & Operations",
+      "feature": "Health Check Probes",
+      "requirement": "Distinct `/health/live` (process alive), `/health/ready` (dependencies connected), and `/health/startup` (initialization complete) endpoints.",
+      "owner": "root",
+      "status": "locally_verified",
+      "implementation": [
+        "LeanWeave/Operations/Health.lean",
+        "integration/platform/Health.lean"
+      ],
+      "checks": [
+        "LeanWeave/Test/PlatformOperations.lean",
+        "test/platform/health.py"
+      ],
+      "evidence": [
+        "docs/platform/platform-result.json",
+        "docs/platform/health-result.json"
+      ],
+      "scope_and_limits": "Distinct live/ready/startup endpoints read published snapshots and never execute dependency I/O in the HTTP callback. ProbeSet schedules bounded owner-local AppM checks from native onTick. A real two-owner verify-full TLS PostgreSQL fixture starts 503, becomes ready 200, loses readiness 503 after login revocation/backend termination, and recovers 200 after restoration while live/startup stay 200. HTTP1/HTTP2 and HEAD metadata/body suppression are exercised. Applications provide and mount their actual dependency probes; a published snapshot alone is not evidence that an arbitrary dependency is healthy.",
+      "verification": {
+        "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
+        "platform_ci": "pending",
+        "api_docs_publication": "pending"
+      }
+    },
+    {
+      "id": "P21",
+      "category": "🔭 Deep Observability & Operations",
+      "feature": "Graceful Drain & Shutdown",
+      "requirement": "On `SIGTERM`, stop accepting new connections, finish in-flight requests, flush job queues, close DB pools, and exit cleanly within a timeout.",
+      "owner": "root",
+      "status": "locally_verified",
+      "implementation": [
+        "LeanWeave/Operations/Runtime.lean",
+        "LeanWeave/Jobs/Lifecycle.lean",
+        "LeanWeave/Core/Server.lean",
+        "LeanWeave/Observability/File.lean"
+      ],
+      "checks": [
+        "adapters/postgres/test/jobs_cluster.py",
+        "LeanWeave/Test/PlatformOperations.lean",
+        "lean-net:test/test_application_streams.py",
+        "test/platform/health.py"
+      ],
+      "evidence": [
+        "docs/platform/jobs-result.json",
+        "adapters/postgres/test/live-result.json",
+        "docs/platform/platform-result.json",
+        "docs/platform/health-result.json"
+      ],
+      "scope_and_limits": "Actual SIGTERM stops admission, completes admitted jobs or cancels/requeues them, cancels pending owner probes, closes owner DB pools and exits normally within tested budgets. The real health fixture observed 0.456301 s against a 1000 ms native shutdown budget and zero PostgreSQL backends after exit; this is a measured case, not a hard realtime guarantee. One absolute native deadline is propagated. Blocking kernel file write/flush and arbitrary noncooperative user IO cannot be hard-preempted.",
+      "verification": {
+        "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
+        "platform_ci": "pending",
+        "api_docs_publication": "pending"
+      }
+    },
+    {
+      "id": "P22",
+      "category": "🔐 Advanced Security & Compliance",
+      "feature": "Audit Logging",
+      "requirement": "Immutable, structured records of security-sensitive actions (login, permission changes, data exports) with tamper-evident hashing.",
+      "owner": "root",
+      "status": "locally_verified",
+      "implementation": [
+        "LeanWeave/Security/Audit.lean",
+        "LeanWeave/Security/Journal.lean",
+        "LeanWeave/Observability/File.lean"
+      ],
+      "checks": [
+        "LeanWeave/Test/PlatformOperations.lean"
+      ],
+      "evidence": [
+        "docs/platform/platform-result.json"
+      ],
+      "scope_and_limits": "Immutable application records form a SHA256 chain with single-writer append/flush receipts, replay, bounded JSON numeric parsing, tamper/reorder/truncation checks and locking/restart tests. Applications explicitly await Journal.record for sensitive actions. Detecting tail replacement/full rewrite requires an externally trusted checkpoint. OS flush is not an fsync/power-loss or WORM-storage guarantee.",
+      "verification": {
+        "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
+        "platform_ci": "pending",
+        "api_docs_publication": "pending"
+      }
+    },
+    {
+      "id": "P23",
+      "category": "🔐 Advanced Security & Compliance",
+      "feature": "Secrets Management",
+      "requirement": "Integration with Vault, AWS Secrets Manager, or environment encryption, with automatic rotation and in-memory-only decryption.",
+      "owner": "root",
+      "status": "locally_verified",
+      "implementation": [
+        "LeanWeave/Secrets/Manager.lean",
+        "adapters/http/LeanWeaveHttp/Vault.lean"
+      ],
+      "checks": [
+        "test/platform/external.py",
+        "LeanWeave/Test/PlatformOperations.lean"
+      ],
+      "evidence": [
+        "docs/platform/external-result.json",
+        "docs/platform/platform-result.json"
+      ],
+      "scope_and_limits": "Actual TLS-verified official Vault KV v2 load/rotation, bootstrap token replacement/revocation and failed-refresh expiry are exercised. Opaque secret values and tokens have no Repr/JSON instance and are held in memory; physical zeroization of every immutable copy is not promised. Rotation is cooperative and deadlines/expiry fail closed. Vault supplies the requested provider alternative; AWS Secrets Manager and environment encryption are not implemented.",
+      "verification": {
+        "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
+        "platform_ci": "pending",
+        "api_docs_publication": "pending"
+      }
+    },
+    {
+      "id": "P24",
+      "category": "🔐 Advanced Security & Compliance",
+      "feature": "Content Security Policy (CSP) Builder",
+      "requirement": "A typed DSL for constructing CSP headers that prevent XSS and data exfiltration, with nonce support.",
+      "owner": "root",
+      "status": "locally_verified",
+      "implementation": [
+        "LeanWeave/Security/Csp.lean",
+        "LeanWeave/Cache/Response.lean"
+      ],
+      "checks": [
+        "LeanWeave/Test/PlatformOperations.lean",
+        "scripts/test_platform_compile.py",
+        "test/browser_realtime.py"
+      ],
+      "evidence": [
+        "test/evidence/realtime-browser.json",
+        "docs/platform/evidence/platform-compile.json",
+        "docs/platform/platform-result.json",
+        "docs/platform/evidence/realtime-browser-repro.json",
+        "docs/platform/evidence/realtime-webkit-final.json"
+      ],
+      "scope_and_limits": "Typed csp! checks and per-response random nonce/header binding are enforced by a real browser. Context nonce and nonce-bearing CSP/report-only responses bypass response and request-fragment caching in either pipeline order, including Redis cache guards; regression tests cover both orders. Low-level explicit-key fragment caches remain caller responsibility. This is a CSP construction/enforcement feature, not a universal XSS-prevention guarantee for arbitrary application code.",
+      "verification": {
+        "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
+        "platform_ci": "pending",
+        "api_docs_publication": "pending"
+      }
+    },
+    {
+      "id": "P25",
+      "category": "🔌 Extensibility & Developer Experience",
+      "feature": "Plugin System with Hot Reload",
+      "requirement": "Define lifecycle hooks (`onStart`, `onRequest`, `onShutdown`) that plugins can implement. Support dynamic loading/unloading in development without restarting the server.",
+      "owner": "root",
+      "status": "locally_verified",
+      "implementation": [
+        "LeanWeave/Plugin/Manager.lean",
+        "adapters/plugins/LeanWeavePlugins/Loader.lean",
+        "adapters/plugins/c/plugins.c"
+      ],
+      "checks": [
+        "adapters/plugins/test/test_reload.py"
+      ],
+      "evidence": [
+        "docs/platform/plugins-result.json"
+      ],
+      "scope_and_limits": "True same-path shared-library hot reload without restart; old deferred requests/streams retain generations until completion/cancel. Max generations/in-flight, failed-load preservation, H1/H2 reset/HEAD/SIGTERM are proved locally. Native C ABI is trusted code, not a sandbox; no unsafe unloading of Lean global initializer closures is attempted.",
+      "verification": {
+        "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
+        "platform_ci": "pending",
+        "api_docs_publication": "pending"
+      }
+    },
+    {
+      "id": "P26",
+      "category": "🔌 Extensibility & Developer Experience",
+      "feature": "Lean 4 Macro-based DSLs",
+      "requirement": "Use Lean's hygienic macros to create expressive, compile-time-checked DSLs for routes, schemas, and policies, catching errors at build time rather than runtime.",
+      "owner": "protocols",
+      "status": "locally_verified",
+      "implementation": [
+        "LeanWeave/Router/DSL.lean",
+        "LeanWeave/Schema/DSL.lean",
+        "LeanWeave/OpenApi/DSL.lean",
+        "LeanWeave/Security/Policy.lean",
+        "LeanWeave/Security/Csp.lean"
+      ],
+      "checks": [
+        "LeanWeave/Test/MacroHygiene.lean",
+        "scripts/test_protocol_compile.py",
+        "scripts/test_platform_compile.py"
+      ],
+      "evidence": [
+        "docs/platform/evidence/protocols-compile.json",
+        "docs/platform/evidence/platform-compile.json",
+        "docs/platform/platform-result.json"
+      ],
+      "scope_and_limits": "Actual elaboration-checked route/schema/authorization/CSP DSLs reject ambiguous routes, wrong handler types, contradictory schemas and invalid policies. Fresh generated identifiers preserve caller section variables and context/capture names. Runtime/compiler regressions exercise section parameters, implicit/generic/typeclass handlers and reverse URLs. The current platform receipt includes MacroHygiene, BodyBounds and JSON-boundary tests; compile-negative protocol and policy reports remain separately linked.",
+      "verification": {
+        "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
+        "platform_ci": "pending",
+        "api_docs_publication": "pending"
+      }
+    },
+    {
+      "id": "P27",
+      "category": "🔌 Extensibility & Developer Experience",
+      "feature": "Built-in API Documentation",
+      "requirement": "Auto-generate OpenAPI/Swagger specs from route definitions and type signatures, reducing documentation drift.",
+      "owner": "protocols",
+      "status": "locally_verified",
+      "implementation": [
+        "LeanWeave/OpenApi/DSL.lean",
+        "LeanWeave/OpenApi/Basic.lean",
+        "LeanWeave/Schema/DSL.lean"
+      ],
+      "checks": [
+        "scripts/test_protocols.py",
+        "scripts/test_protocol_compile.py"
+      ],
+      "evidence": [
+        "docs/platform/evidence/protocols-wire.json",
+        "docs/platform/evidence/grpc-web-webkit-final.json"
+      ],
+      "scope_and_limits": "weave_api drives actual route definitions, checked handler input/output codecs and OpenAPI 3.1.1 JSON from one declaration, rejecting missing/colliding metadata and unrepresentable overlaps. A real native spec endpoint is exercised. Swagger page/bootstrap helpers use application-supplied hosted assets; a bundled Swagger distribution and arbitrary Lean type reflection are not implemented. Generated spec functionality is locally verified; publication of the final integrated API documentation remains pending.",
+      "verification": {
+        "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
+        "platform_ci": "pending",
+        "api_docs_publication": "pending"
+      }
+    }
+  ],
+  "schema_version": 2,
+  "merged_at_utc": "2026-11-16T16:23:27.340275+00:00",
+  "source_at_merge": {
+    "head": "5f6aa966b8678867719561405d656516cefe3241",
+    "working_tree_dirty": true,
+    "lean_net_revision": "dcce82480a6985b3269a474b12b81863e6bdb115",
+    "binding": "Use each report source manifest/fixture digest for the tested files. The working tree contains final integration changes; this merge does not assign them the HEAD revision or infer unrecorded transitive source coverage."
+  },
+  "status": "locally_verified_pending_final_gates",
+  "verification_gates": {
+    "platform_ci": {
+      "status": "pending",
+      "required": [
+        "Framework native/wire Linux, macOS and Windows",
+        "Real PostgreSQL/Redis/Vault/Collector services on supported CI platform",
+        "Actual Chromium and WebKit Live/CSP and official gRPC-Web clients"
+      ],
+      "note": "Configured workflows and the prior core release are not acceptance evidence for the final platform revision. Root will record immutable run IDs and conclusions after execution."
+    },
+    "api_docs_publication": {
+      "status": "pending",
+      "required": "Build and publish doc-gen4 API docs from the final integrated platform revision; verify that the published new modules are present."
+    },
+    "final_receipt_refresh": {
+      "status": "locally_verified",
+      "required": [
+        "GraphQL native/wire and official GraphQL.js/graphql-ws clients after final numeric-parser changes",
+        "Final source-bound protocol compile/wire and official gRPC-Web browser receipts",
+        "Current multiview Live/CSP receipts in Chromium and WebKit"
+      ],
+      "note": "Completed: GraphQL unit and8real wire tests plus official GraphQL.js17.1/graphql-ws6.4.2; Stream/SSE/PubSub/Presence unit and7real wire tests; Live/CSP multiview and mixed fallback in Chromium158.0.8127.18 and WebKit27.2; protocol compile19, official grpcio/protobuf wire11, and6official gRPC-Web checks in each browser. Current source/runner/manifest digests and fixture hashes match. This does not substitute for final framework CI or publication."
+    }
+  },
+  "cross_cutting_acceptance": [
+    {
+      "feature": "Bounded cooperative typed generators",
+      "implementation": [
+        "LeanWeave/Stream.lean"
+      ],
+      "checks": [
+        "LeanWeave/Test/Generator.lean",
+        "LeanWeave/Test/PlatformMain.lean"
+      ],
+      "evidence": [
+        "docs/platform/platform-result.json"
+      ],
+      "verified_cases": [
+        "one admitted AppM execution; ordered state transitions",
+        "zero initial credit produces nothing",
+        "pending await and whole-step deadlines progress at zero later credit",
+        "one completed bounded chunk waits at zero credit; no next step",
+        "cancel/error/HEAD/exactly-once cleanup; declared terminal trailers",
+        "multipart header byte bounds before concatenation"
+      ]
+    },
+    {
+      "feature": "Bounded JSON numbers before arbitrary-precision parsing",
+      "implementation": [
+        "LeanWeave/Core/Body.lean"
+      ],
+      "checks": [
+        "LeanWeave/Test/BodyBounds.lean",
+        "LeanWeave/Test/JsonBoundarySecurity.lean",
+        "LeanWeave/GraphQL/ParserTest.lean"
+      ],
+      "evidence": [
+        "docs/platform/platform-result.json",
+        "docs/platform/jobs-result.json",
+        "docs/platform/plugins-result.json"
+      ],
+      "defaults": {
+        "maxNumberDigits": 512,
+        "maxExponentMagnitude": 1024,
+        "configuration_hard_cap": 4096
+      },
+      "scope_and_limits": "The preflight limits lexical mantissa/exponent digits, positive exponent expansion, effective decimal denominator and canonical formatting before Lean.Json.parse. 1e1000000000 is rejected before expansion; 1.7e308 and 5e-324 round-trip. Numeric zero is normalized. Numeric-looking strings remain strings, with separate caller-specific decimal-string checks. Per-number compress/reparse closure does not waive independent whole-document byte/depth/node limits. JWT/audit replay/stored jobs-workflows/plugin headers/GraphQL numeric tokens/OTLP JSON use the shared guard."
+    },
+    {
+      "feature": "Real owner-local dependency health and shutdown",
+      "implementation": [
+        "LeanWeave/Operations/Health.lean",
+        "integration/platform/Health.lean"
+      ],
+      "checks": [
+        "test/platform/health.py"
+      ],
+      "evidence": [
+        "docs/platform/health-result.json"
+      ],
+      "scope_and_limits": "Real disposable verify-full TLS PostgreSQL; two owners, one connection and at most one probe execution per owner; onTick SELECT 1, real revocation/outage/recovery, HTTP1+HTTP2 and HEAD; SIGTERM cancels pending probes and closes pools. Does not claim hard preemption of a stalled OS filesystem."
+    }
+  ],
+  "review_basis": {
+    "path": "docs/platform/acceptance-review.json",
+    "note": "The independent review is historical input. Its stale/pending statements are superseded only where current source-bound reports or explicit current tests exist; its publication and supported-profile limits remain preserved."
+  },
+  "refreshed_at_utc": "2026-11-16T16:26:39.969762+00:00",
+  "source_after_local_refresh": {
+    "head": "45c122f699ce8ad5f092f1658263c9f3addf1e7d",
+    "lean_net_revision": "dcce82480a6985b3269a474b12b81863e6bdb115",
+    "binding": "Current source/runner/manifest and native fixture digests are audited below. This records local verification, not the result of pending framework CI."
+  },
+  "evidence_freshness": [
+    {
+      "path": "docs/platform/platform-result.json",
+      "recorded_source_hashes": 40,
+      "mismatches": []
+    },
+    {
+      "path": "docs/platform/external-result.json",
+      "recorded_source_hashes": 14,
+      "mismatches": []
+    },
+    {
+      "path": "docs/platform/health-result.json",
+      "recorded_source_hashes": 11,
+      "mismatches": []
+    },
+    {
+      "path": "docs/platform/jobs-result.json",
+      "recorded_source_hashes": 16,
+      "mismatches": []
+    },
+    {
+      "path": "docs/platform/plugins-result.json",
+      "recorded_source_hashes": 9,
+      "mismatches": []
+    },
+    {
+      "path": "adapters/http/test/wire-result.json",
+      "recorded_source_hashes": 4,
+      "mismatches": []
+    },
+    {
+      "path": "adapters/redis/test/pubsub-presence-result.json",
+      "recorded_source_hashes": 6,
+      "mismatches": []
+    },
+    {
+      "path": "test/evidence/graphql-clients.json",
+      "recorded_source_hashes": 26,
+      "mismatches": []
+    },
+    {
+      "path": "test/evidence/realtime-browser.json",
+      "recorded_source_hashes": 24,
+      "mismatches": []
+    },
+    {
+      "path": "docs/platform/evidence/realtime-browser-repro.json",
+      "recorded_source_hashes": 24,
+      "mismatches": []
+    },
+    {
+      "path": "docs/platform/evidence/realtime-webkit-final.json",
+      "recorded_source_hashes": 24,
+      "mismatches": []
+    },
+    {
+      "path": "docs/platform/evidence/protocols-compile.json",
+      "recorded_source_hashes": 40,
+      "mismatches": []
+    },
+    {
+      "path": "docs/platform/evidence/protocols-wire.json",
+      "recorded_source_hashes": 40,
+      "mismatches": []
+    },
+    {
+      "path": "docs/platform/evidence/grpc-web-browser.json",
+      "recorded_source_hashes": 40,
+      "mismatches": []
+    },
+    {
+      "path": "docs/platform/evidence/grpc-web-webkit-final.json",
+      "recorded_source_hashes": 40,
+      "mismatches": []
+    }
+  ]
+}

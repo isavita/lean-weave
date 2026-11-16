@@ -1,0 +1,173 @@
+{
+  "passed": true,
+  "platform": "macOS-27.2.1-arm64-arm-64bit-Mach-O",
+  "machine": "arm64",
+  "lean": "Lean (version 4.35.0, arm64-apple-darwin24.6.0, commit eb6cafb7290e8bd5f2937522d8d804f58f02bafc, Release)",
+  "lean_net_rev": "05733390a34012b2a388fd35bf2eb704916c30be",
+  "postgres": true,
+  "http": true,
+  "official_external_services": true,
+  "native_groups": [
+    "SHA256/HMAC/base64url independent reference",
+    "hostile JWT and verified tenant sources",
+    "tenant dynamic config/rate/branding",
+    "cache tenant/config/feature isolation and bypass",
+    "sticky flags/kill/audience/mutation audit",
+    "CSP nonce/header/DSL",
+    "trace sampling/provenance/redaction/idempotence/stream cancellation",
+    "real job child span",
+    "OTLP retry/drain",
+    "structured logs/sampling/redaction/file",
+    "health/startup/readiness",
+    "shared deadline cleanup",
+    "secret rotation/expiry",
+    "audit anchoring/tamper/locking/restart/async append"
+  ],
+  "commands": [
+    {
+      "argv": [
+        "lake",
+        "build",
+        "weave-platform-test",
+        "weave-crypto-fixture"
+      ],
+      "cwd": "."
+    },
+    {
+      "argv": [
+        "/Users/isavita/git/lean-weave-platform/.lake/build/bin/weave-platform-test"
+      ],
+      "cwd": "."
+    },
+    {
+      "argv": [
+        "/private/tmp/leanweave-http-venv/bin/python",
+        "test/platform/crypto.py"
+      ],
+      "cwd": "."
+    },
+    {
+      "argv": [
+        "/private/tmp/leanweave-http-venv/bin/python",
+        "scripts/test_platform_compile.py"
+      ],
+      "cwd": "."
+    },
+    {
+      "argv": [
+        "lake",
+        "build",
+        "weave-pg-tenant-test"
+      ],
+      "cwd": "adapters/postgres"
+    },
+    {
+      "argv": [
+        "/private/tmp/leanweave-http-venv/bin/python",
+        "adapters/postgres/test/tenant_compile.py"
+      ],
+      "cwd": "."
+    },
+    {
+      "argv": [
+        "/private/tmp/leanweave-http-venv/bin/python",
+        "adapters/postgres/test/tenant_cluster.py",
+        "--pg-bin",
+        "/opt/homebrew/opt/postgresql@17/bin"
+      ],
+      "cwd": "."
+    },
+    {
+      "argv": [
+        "lake",
+        "build",
+        "weave-http-test"
+      ],
+      "cwd": "adapters/http"
+    },
+    {
+      "argv": [
+        "/private/tmp/leanweave-http-venv/bin/python",
+        "adapters/http/test/wire.py"
+      ],
+      "cwd": "."
+    },
+    {
+      "argv": [
+        "lake",
+        "build",
+        "platform-integration"
+      ],
+      "cwd": "integration/platform"
+    },
+    {
+      "argv": [
+        "/private/tmp/leanweave-http-venv/bin/python",
+        "test/platform/external.py"
+      ],
+      "cwd": "."
+    },
+    {
+      "argv": [
+        "/private/tmp/leanweave-http-venv/bin/python",
+        "test/platform/test_health_probes.py",
+        "-v"
+      ],
+      "cwd": "."
+    },
+    {
+      "argv": [
+        "/private/tmp/leanweave-http-venv/bin/python",
+        "test/platform/health.py",
+        "--pg-bin",
+        "/opt/homebrew/opt/postgresql@17/bin"
+      ],
+      "cwd": "."
+    }
+  ],
+  "source_sha256": {
+    "LeanWeave/Cache/Response.lean": "487e79501ffdf2cc83b83be6b27005c3bf3a61bdc33ca595cb8f835eaaacdda5",
+    "LeanWeave/Core/Body.lean": "92ca432535b012037f6ed9024687f0094498f9ec4f83a05b2b98e2f3c29bd4ed",
+    "LeanWeave/Core/Server.lean": "a3c54312f7755e20c500d4a4180833971d9c30a5f2784de8b729624f540aa738",
+    "LeanWeave/Core/Static.lean": "863b1d8d9fe44f89fcda487340c65076086bbe63adb100de21909e6412db13a3",
+    "LeanWeave/Feature/Basic.lean": "d187ef29a0e1b6796eaa7ef8e05cfd748562267e588897c219067dde2ee5a158",
+    "LeanWeave/Observability/Export.lean": "ce72a0fc3c9549c3f64cc62e3880abd98269a556f44ba170bea5f8a7dd86fdb6",
+    "LeanWeave/Observability/File.lean": "7937b7a90657a161885f51464b59d07d4d2f280de5c1dd6a071e7d260fdf2ca1",
+    "LeanWeave/Observability/Jobs.lean": "a03ac1498e68ad4fa1b77fcc52a07e185029ed4d607cc61b5299f836706cde50",
+    "LeanWeave/Observability/Logging.lean": "95de4128a262312c66e83c5b6375b11ff64914c0db40ef44d92ee2ceefbc1887",
+    "LeanWeave/Observability/Trace.lean": "36e244dbc0c328fb39025f0cd2e38146fb1229e1d6b62d068f40d2b588d40d62",
+    "LeanWeave/Operations/Health.lean": "e6cba1752170b972362eebf0c5fb0cd3799142d0db03b2b2f45b4158135e3134",
+    "LeanWeave/Operations/Runtime.lean": "4c338ae1235c52d15197afafa061e6fa40ef776eddd01a5994fde79de26f5ec4",
+    "LeanWeave/Secrets/Manager.lean": "e0320ef790cde7fdb72adb866ab5080f4f9bf1b66d785f9449690b33ab662b2e",
+    "LeanWeave/Security/Audit.lean": "344f0ab1dffcc8254be85938bad73c6a6fefd24c8f8160d0cadd0e360ee150a6",
+    "LeanWeave/Security/Crypto.lean": "c9493e2e70988251c21d930ef32b626985664ff13be7a20e7994e4ba8db93997",
+    "LeanWeave/Security/Csp.lean": "6a433c6c6422e114ee9bbb266fed3d0424514d249a9fa08e990ea389781b7469",
+    "LeanWeave/Security/Journal.lean": "2e9e93e6824ef853b851bca1b18584ced7bed15fd36cb62ec64db3e06888da9d",
+    "LeanWeave/Security/Jwt.lean": "4ccbdb8edf742c4eaf0193cf7eb0882ce96cd94112eac3f601c91859b5713891",
+    "LeanWeave/Security/Policy.lean": "2b7064b33c573075ee4cfec998ac0ee68b1ffe8f48effbce61773268c3468393",
+    "LeanWeave/Stream.lean": "e8cf2313b48035e3321e57db9300b76c0a6817232484327566b697fa2b38916c",
+    "LeanWeave/Tenant/Basic.lean": "fe515cb3f9ac5165f9ab8bfaef62fa57b1b7d8b8d464f3d489d07af7060210ab",
+    "LeanWeave/Tenant/Brand.lean": "060439d045a6635043c1ba5498af4827604785ac780a073ab21ed14b09af59e9",
+    "LeanWeave/Tenant/Config.lean": "1a216b2add88ac9fbd07c335a04030810f39a3bf3cd3deee1b712a73ce03c8d3",
+    "LeanWeave/Tenant/ConfigTest.lean": "daa228db3581bf87fc3950bbbdd19db289f69b45febdb1ae17001597a3379b5d",
+    "LeanWeave/Tenant/Jwt.lean": "64d0b3969be1012f16fdac9bbda75aae3f4aff6f669609230c7776dd0c9419a6",
+    "LeanWeave/Tenant/Sql.lean": "1193d4f58fc3086100ad241865a4522cdbca232ee44c18df031011cadca8cbaf",
+    "LeanWeave/Test/BodyBounds.lean": "6095300b628fbe9662924ae1e41e54678b32f483dc17a781f505da9de3e2207d",
+    "LeanWeave/Test/Generator.lean": "46989d141383d049ea1854841e6f1ad141cf708ca896b231b01d2afa8fc82451",
+    "LeanWeave/Test/JsonBoundarySecurity.lean": "f6902c5b5beeb30533f8f83553e3b696e3dd53e539859912885bb6d5d0222ad2",
+    "LeanWeave/Test/MacroHygiene.lean": "0124cc36cc83fb2e089b9cf2fcb040711c77b369c67be8085b042115920b8693",
+    "LeanWeave/Test/PlatformMain.lean": "1f3d7a48c841c39650328960e4039774c797d45e5d33a6cf6d68b3dcdb35badd",
+    "LeanWeave/Test/PlatformOperations.lean": "384f7ac287c15dec3a6b42b7f80da9c087ace7b6618a863b2813075fef96a6ba",
+    "LeanWeave/Test/PlatformSecurity.lean": "a1c65b5380ad09cde8faf6afb4848d7ea025866392a200212c017c9bbb4195b1",
+    "adapters/http/LeanWeaveHttp/Client.lean": "97dd2b866dca2fab7991e606d74c4faf0e31d50f0be033d0e0c69e8eb83af30b",
+    "adapters/http/LeanWeaveHttp/Native.lean": "07c7175199685f4e8ed4ced841590cecffc647a546d59105b4107015fb21badf",
+    "adapters/http/LeanWeaveHttp/Otlp.lean": "572a1ebf1905fcd7b2ca1a4b6d581db0dd82535ffec30a7e64c0f070c1541972",
+    "adapters/http/LeanWeaveHttp/Vault.lean": "7b6be9cb3cd9acbaa539fdcbbc02c599570503cf98db4403754ad885a4bc1331",
+    "adapters/http/c/http.c": "2f7bd62966de3f57816513f4b869333be8b2b049e8018fb925054f6e899fe861",
+    "adapters/postgres/LeanWeavePostgres/Pool.lean": "15c8c8979ac9cde883e88bc5e1bd52d7dec72dd2575aad93dce89dc4b9a22ee2",
+    "adapters/postgres/LeanWeavePostgres/Tenant.lean": "b129ad10e6180e808c97cca1fe4252970213bf910175697ba924fce655bd571a",
+    "test/platform/health.py": "5946c7fd35f59e93cc894317856eca0e0d80d5e54d06cb103864687d2d1d3335",
+    "test/platform/run.py": "60a3c509a7c4cf1c2ab7eae24259b002fbf7a99661686e2a059ddf6240346c10",
+    "test/platform/test_health_probes.py": "2d237961eecd4590b3728effdf90feeb8e9995e3fcc59e07ed0be9ab283bce37"
+  }
+}

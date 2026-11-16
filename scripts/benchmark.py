@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Record native core timings and Lean thread-local small-allocation counts."""
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -12,16 +13,26 @@ root = Path(__file__).resolve().parents[1]
 p = argparse.ArgumentParser()
 p.add_argument("--iterations", type=int, default=20000)
 p.add_argument("--output", type=Path, default=root / "benchmarks/results.json")
+p.add_argument("--platform", action="store_true", help="sample advanced application platform primitives")
 a = p.parse_args()
-subprocess.run(["lake", "build", "weave-bench"], cwd=root, check=True)
-binary = root / (".lake/build/bin/weave-bench" + (".exe" if os.name == "nt" else ""))
+target = "weave-platform-bench" if a.platform else "weave-bench"
+subprocess.run(["lake", "build", target], cwd=root, check=True)
+binary = root / (".lake/build/bin/" + target + (".exe" if os.name == "nt" else ""))
 result = subprocess.run([str(binary), str(a.iterations)], cwd=root, text=True, capture_output=True, check=True)
+sources = (["benchmarks/Platform.lean", "LeanWeave/Tenant/Basic.lean", "LeanWeave/Feature/Basic.lean",
+    "LeanWeave/Security/Crypto.lean", "LeanWeave/Security/Audit.lean", "LeanWeave/Observability/Trace.lean",
+    "LeanWeave/Observability/Logging.lean", "LeanWeave/Realtime/PubSub.lean"] if a.platform else
+    ["benchmarks/Main.lean", "LeanWeave/Core.lean", "LeanWeave/Router/Runtime.lean", "LeanWeave/Html/Basic.lean",
+     "LeanWeave/Cache/Store.lean"])
+sources += ["scripts/benchmark.py", "lake-manifest.json"]
 report = {
     "utc": datetime.now(timezone.utc).isoformat(),
     "platform": platform.platform(), "machine": platform.machine(), "processor": platform.processor(),
     "lean": subprocess.check_output(["lean", "--version"], cwd=root, text=True).strip(),
     "commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip(),
     "dirty": bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=root, text=True).strip()),
+    "source_sha256": {name: hashlib.sha256((root / name).read_bytes()).hexdigest() for name in sources},
+    "binary_sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
     "measurement": "Native wall time and IO.getNumHeartbeats thread-local small allocation deltas; excludes large byte buffers, native malloc, RSS, sockets and TLS. Counts include loop and IO scaffolding.",
     "samples": [json.loads(line) for line in result.stdout.splitlines() if line.strip()],
 }

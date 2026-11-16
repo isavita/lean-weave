@@ -1,6 +1,8 @@
 import LeanWeave.Core.AppM
 import LeanNet.HTTP1.Request
 import LeanNet.HTTP1.Response
+import LeanNet.HTTP1.Encoding
+import LeanWeave.Core.Stream
 import Lean.Data.Json
 
 namespace LeanWeave
@@ -32,6 +34,8 @@ structure Response where
   status : Nat := 200
   headers : Array LeanNet.HTTP1.Header := #[]
   body : ByteArray := ByteArray.empty
+  /-- Optional worker-owned cooperative body; exclusive with `body`. -/
+  stream : Option Stream.Body := none
 
 abbrev Handler := Context → AppM Response
 abbrev Middleware := Handler → Handler
@@ -69,8 +73,16 @@ def Response.html (body : String) (status : Nat := 200) : Response :=
 def Response.json (body : Lean.Json) (status : Nat := 200) : Response :=
   ({ status, body := body.compress.toUTF8 } : Response) |>.withHeader "content-type" "application/json; charset=utf-8"
 
+/-- Response metadata only. Use `toReply` to preserve cooperative bodies. -/
 def Response.toNet (r : Response) : LeanNet.HTTP1.Response :=
   { status := r.status, headers := r.headers, body := r.body }
+
+def Response.toReply (r : Response) : LeanNet.HTTP1.Reply :=
+  { response := r.toNet, stream := r.stream }
+
+def Response.streaming (body : Stream.Body) (status : Nat := 200)
+    (headers : Array LeanNet.HTTP1.Header := #[]) : Response :=
+  { status, headers, stream := some body }
 
 def Response.ofError (e : AppError) : Response := Response.text e.message e.status
 

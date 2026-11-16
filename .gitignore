@@ -5,3 +5,8 @@ __pycache__/
 .env
 .env.*
 !.env.example
+
+.playwright-cli/
+
+output/playwright/
+test/graphql-client/node_modules/

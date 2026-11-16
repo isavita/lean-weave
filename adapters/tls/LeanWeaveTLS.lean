@@ -36,6 +36,18 @@ def serveManaged (factory : Nat → (Handler → IO Unit) → IO Unit) (tls : Co
     (config : Server.Config := { port := 8443 }) (upstreamCA : Option String := none) : IO Unit :=
   withTransport tls config upstreamCA fun transport config => Server.serveManagedWithTransport transport factory config
 
+/-- Stateful streams, WebSockets and drain hooks share the TLS owner's lifecycle. -/
+def serveApplications (factory : Nat → (Server.Application → IO Unit) → IO Unit) (tls : Config)
+    (config : Server.Config := { port := 8443 }) (upstreamCA : Option String := none) : IO Unit :=
+  withTransport tls config upstreamCA fun transport config => Server.serveApplicationsWithTransport transport factory config
+
+/-- Compose native compressed assets with worker-built application lifecycle hooks. -/
+def serveStaticApplications (assets : Server.StaticConfig)
+    (factory : Nat → (Server.Application → IO Unit) → IO Unit) (tls : Config)
+    (config : Server.Config := { port := 8443 }) (upstreamCA : Option String := none) : IO Unit :=
+  withTransport tls config upstreamCA fun transport config =>
+    Server.serveStaticApplicationsWithTransport transport assets factory config
+
 /-- Serve mounted immutable file regions through dedicated TLS workers, preserving
 compression, validators, HEAD framing and application deferred replies. -/
 def serveStatic (assets : Server.StaticConfig) (factory : Nat → IO Handler) (tls : Config)

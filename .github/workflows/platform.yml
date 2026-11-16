@@ -1,0 +1,234 @@
+name: Application platform acceptance
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: platform-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  native:
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-15-intel, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      LEAN_NUM_THREADS: '2'
+      HOMEBREW_NO_AUTO_UPDATE: '1'
+      HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: '1'
+      HOMEBREW_NO_INSTALL_CLEANUP: '1'
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - name: Linux native dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgmp-dev libuv1-dev libssl-dev zlib1g-dev libbrotli-dev libcurl4-openssl-dev pkg-config
+          echo 'LEAN_CC=cc' >> "$GITHUB_ENV"
+      - name: macOS native dependencies
+        if: runner.os == 'macOS'
+        run: brew install zlib brotli pkgconf curl openssl@3
+      - name: Windows native dependencies
+        if: runner.os == 'Windows'
+        id: msys
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: mingw-w64-x86_64-gcc mingw-w64-x86_64-zlib mingw-w64-x86_64-brotli mingw-w64-x86_64-pkgconf mingw-w64-x86_64-curl mingw-w64-x86_64-openssl
+      - name: Select Windows compiler and DLLs
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          MSYS2_LOCATION: ${{ steps.msys.outputs.msys2-location }}
+        run: |
+          $mingw = (Join-Path $env:MSYS2_LOCATION 'mingw64').Replace('\', '/')
+          "$mingw/bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          "PKG_CONFIG_PATH=$mingw/lib/pkgconfig" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+      - name: Restore Windows OpenSSL curl selection
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          MSYS2_LOCATION: ${{ steps.msys.outputs.msys2-location }}
+        run: |
+          $mingw = Join-Path $env:MSYS2_LOCATION 'mingw64'
+          $bin = Join-Path $mingw 'bin'
+          $pkgconfig = Join-Path $mingw 'lib/pkgconfig'
+          $bin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          "PKG_CONFIG_PATH=$pkgconfig" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "CURL_SSL_BACKEND=openssl" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          $env:PKG_CONFIG_PATH = $pkgconfig
+          $env:CURL_SSL_BACKEND = 'openssl'
+          $version = (& (Join-Path $bin 'curl.exe') --version) -join "`n"
+          $version | Write-Output
+          if ($LASTEXITCODE -ne 0 -or $version -notmatch 'OpenSSL/') { throw 'MSYS2 curl must use OpenSSL for strict in-memory CA trust' }
+          if ($version -notmatch '(?m)^Features:.*\bHTTP2\b') { throw 'MSYS2 curl must support HTTP2 for ALPN acceptance' }
+          & (Join-Path $bin 'pkg-config.exe') --modversion libcurl
+          if ($LASTEXITCODE -ne 0) { throw 'MSYS2 libcurl pkg-config metadata is unavailable' }
+          & (Join-Path $bin 'pkg-config.exe') --variable=libdir libcurl
+      - name: Select macOS native libraries
+        if: runner.os == 'macOS'
+        run: echo "PKG_CONFIG_PATH=$(brew --prefix curl)/lib/pkgconfig:$(brew --prefix zlib)/lib/pkgconfig:$(brew --prefix brotli)/lib/pkgconfig:$(brew --prefix openssl@3)/lib/pkgconfig" >> "$GITHUB_ENV"
+      - uses: leanprover/lean-action@v1
+        with:
+          auto-config: false
+          build: false
+          test: false
+          lint: false
+      - name: Build native application platform
+        run: lake build LeanWeave weave-platform-test weave-jobs-test weave-stream-test weave-protocol-fixture weave-realtime-fixture weave-crypto-fixture weave-graphql-test weave-graphql-fixture
+      - name: Install HTTP2 test codec
+        run: python -m pip install --index-url https://pypi.org/simple --require-hashes -r scripts/requirements-test.txt
+      - name: Platform contracts, independent crypto and HTTP/TLS
+        run: lake env python test/platform/run.py --http
+      - name: Native jobs and workflow contracts
+        run: .lake/build/bin/weave-jobs-test
+      - name: Native stream, PubSub and presence contracts
+        run: .lake/build/bin/weave-stream-test
+      - name: Install official protocol clients
+        run: python -m pip install --index-url https://pypi.org/simple -r scripts/requirements-protocols.txt
+      - name: Realtime streaming HTTP1/HTTP2 wire parity
+        run: lake env python test/test_realtime.py -v
+      - name: GraphQL execution and websocket protocol
+        run: |
+          .lake/build/bin/weave-graphql-test
+          lake env python test/test_graphql.py -v
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - name: Official GraphQL schema and websocket clients
+        run: |
+          npm ci --prefix test/graphql-client --ignore-scripts --no-audit --no-fund
+          node test/graphql-client/acceptance.mjs
+      - name: Typed protocol compiler rejection checks
+        run: lake env python scripts/test_protocol_compile.py
+      - name: Protocol fixture process lifecycle
+        run: lake env python scripts/test_protocol_launcher.py -v
+      - name: Official gRPC and gRPC-Web HTTP1/HTTP2 interoperability
+        run: lake env python scripts/test_protocols.py --report docs/platform/evidence/protocols-ci.json
+      - name: Platform allocation sample
+        run: lake env python scripts/benchmark.py --platform --iterations 2000 --output benchmarks/platform-ci-results.json
+      - name: Native plugin reload and lifecycle
+        run: |
+          lake -d adapters/plugins build weave-plugin-fixture
+          lake env python adapters/plugins/test/test_reload.py --output docs/platform/plugins-ci-result.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: platform-${{ runner.os }}
+          path: |
+            benchmarks/platform-ci-results.json
+            docs/platform/*result.json
+            docs/platform/evidence/*.json
+            adapters/http/test/wire-result.json
+  services:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      LEAN_CC: cc
+      LEAN_NUM_THREADS: '2'
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install real service and native dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgmp-dev libuv1-dev libssl-dev libpq-dev postgresql redis-server zlib1g-dev libbrotli-dev libcurl4-openssl-dev pkg-config openssl curl
+          echo "WEAVE_PG_BIN=$(pg_config --bindir)" >> "$GITHUB_ENV"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+      - uses: leanprover/lean-action@v1
+        with:
+          auto-config: false
+          build: false
+          test: false
+          lint: false
+      - name: Fetch checksum-verified official Vault and Collector
+        run: |
+          python test/platform/fetch_tools.py
+          echo "WEAVE_VAULT_BINARY=$HOME/.cache/leanweave-test-tools/vault-1.20.0/vault" >> "$GITHUB_ENV"
+          echo "WEAVE_OTELCOL_BINARY=$HOME/.cache/leanweave-test-tools/otelcol-0.131.0/otelcol" >> "$GITHUB_ENV"
+      - name: Install HTTP2 test codec
+        run: python -m pip install --index-url https://pypi.org/simple --require-hashes -r scripts/requirements-test.txt
+      - name: Real PostgreSQL RLS, Vault TLS rotation and official OTLP
+        run: lake env python test/platform/run.py --postgres --http --external
+      - name: Durable jobs, transactional outbox, workflows and SIGTERM recovery
+        run: |
+          lake -d adapters/postgres build weave-pg-jobs-test
+          lake env python adapters/postgres/test/jobs_cluster.py --output docs/platform/jobs-ci-result.json
+      - name: Distributed PubSub and presence
+        run: |
+          lake -d adapters/redis build weave-redis-pubsub-fixture
+          lake env python adapters/redis/test/test_pubsub_presence.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: platform-services
+          path: |
+            docs/platform/*result.json
+            docs/platform/evidence/*.json
+            adapters/postgres/test/tenant-result.json
+
+  browsers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      LEAN_CC: cc
+      LEAN_NUM_THREADS: '2'
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install native dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgmp-dev libuv1-dev libssl-dev zlib1g-dev libbrotli-dev pkg-config
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - uses: leanprover/lean-action@v1
+        with:
+          auto-config: false
+          build: false
+          test: false
+          lint: false
+      - name: Build native browser fixtures
+        run: lake build weave-realtime-fixture weave-protocol-fixture
+      - name: Install official protocol clients
+        run: python -m pip install --index-url https://pypi.org/simple -r scripts/requirements-protocols.txt
+      - name: Install real browser engines
+        run: |
+          npx --yes --package @playwright/cli@0.1.24 playwright-cli install-browser chromium --with-deps
+          npx --yes --package @playwright/cli@0.1.24 playwright-cli install-browser webkit --with-deps
+      - name: Live WebSocket/SSE, CSP and official gRPC-Web browser interoperability
+        run: |
+          for browser in chromium webkit; do
+            lake env python test/browser_realtime.py --browser "$browser" --output "output/playwright/realtime-$browser" --report "docs/platform/evidence/realtime-$browser-ci.json"
+            lake env python scripts/test_grpc_web_browser.py --browser "$browser" --report "docs/platform/evidence/grpc-web-$browser-ci.json"
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: platform-browsers
+          path: |
+            docs/platform/evidence/*ci.json
+            output/playwright/

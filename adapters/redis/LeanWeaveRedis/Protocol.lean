@@ -85,6 +85,12 @@ private def parseAt (bytes : ByteArray) (offset depth : Nat) (limits : Limits) :
     | _ => throw "unsupported Redis RESP2 marker"
 termination_by depth
 
+/-- Decode one bounded RESP value from a persistent subscription buffer. -/
+def parsePrefix (bytes : ByteArray) (limits : Limits := {}) : Except String (Option (Value × Nat)) := do
+  if bytes.size > limits.maxResponseBytes then throw "Redis response exceeds byte bound"
+  let some (value, used, _) ← parseAt bytes 0 limits.maxDepth limits | return none
+  return some (value, used)
+
 /-- `none` means a fragmented reply. Exactly one response is accepted; trailing
 bytes are rejected to prevent silent protocol desynchronization. -/
 def parse (bytes : ByteArray) (limits : Limits := {}) : Except String (Option Value) := do

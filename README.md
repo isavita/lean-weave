@@ -1,9 +1,9 @@
 # LeanWeave
 
-Typed web applications in Lean 4, built over [lean-net](https://github.com/isavita/lean-net).
+Typed web applications and application services in Lean 4, built over [lean-net](https://github.com/isavita/lean-net).
 Package: `lean-weave`. Namespace: `LeanWeave`. Lean: `v4.35.0`. License: Apache-2.0.
 
-[API reference](https://isavita.github.io/lean-weave/) · [Execution and security](docs/contracts.md) · [Cache consistency](docs/caching.md) · [Examples](Examples/README.md) · [Acceptance and benchmarks](docs/acceptance.md)
+[API reference](https://isavita.github.io/lean-weave/) · [Application platform](docs/platform/operations.md) · [Execution and security](docs/contracts.md) · [Cache consistency](docs/caching.md) · [Examples](Examples/README.md) · [Acceptance and benchmarks](docs/acceptance.md)
 
 ```lean
 import LeanWeave
@@ -41,7 +41,7 @@ lake build weave-pages weave-forms weave-crud weave-dashboard
 lake exe weave-pages
 ```
 
-The dependency is pinned to lean-net's deferred-reply commit. A sibling checkout
+The dependency is pinned to lean-net's streaming/lifecycle commit. A sibling checkout
 is unnecessary. Windows build steps are in `.github/workflows/ci.yml`.
 
 ```sh
@@ -112,6 +112,35 @@ The routing, ordered pipeline and caching designs draw on
 - Compressed static files: `Server.serveStatic` mounts a sealed catalog with gzip/Brotli and file regions; [composition](docs/transport.md).
 - Admission/rate limits, access logs and Prometheus metrics use `Server.Config.net`.
 
-Jobs, mail and realtime are optional application integrations; none is started or
-required by the core. PostgreSQL and Redis are separate Lake packages and are not
-linked into applications that only import LeanWeave.
+Background jobs, realtime and plugins are explicit application runtimes: importing
+LeanWeave does not start workers, listeners or services. PostgreSQL, Redis, outbound
+HTTP/Vault/OTLP, TLS and native plugin loading remain separate Lake packages.
+Mail can be supplied by an application adapter.
+
+## Application platform
+
+- [Realtime](LeanWeave/Realtime/README.md): bounded channels, local/Redis PubSub, causal CRDT presence, replaying SSE, typed Live components and WebSocket/SSE transport.
+- [Jobs and workflows](docs/platform/jobs-workflows.md): typed payloads, dedicated owner workers, retry/dead letters, cron timers, durable PostgreSQL outbox and compensating workflows.
+- [Tenancy and operations](docs/platform/operations.md): verified tenant resolution, typed SQL/RLS scopes, dynamic tenant settings, sticky flags and audited mutations, tracing/OTLP, sampled logs, probes, drain, rotating Vault secrets and typed CSP/authorization policies.
+- [GraphQL](LeanWeave/GraphQL/README.md): typed executable queries/mutations, introspection and bounded `graphql-transport-ws` subscriptions.
+- [Protocols and API documentation](docs/platform/protocols.md): checked schemas, generated OpenAPI/Swagger, native protobuf and gRPC/gRPC-Web unary/streaming methods.
+- [Native plugins](adapters/plugins/README.md): versioned C ABI, per-generation request/stream leases and development reload without restarting the listener.
+
+`Server.Application` builds streaming, WebSocket and lifecycle callbacks on their
+owner. `Server.serveApplications`, `TLS.serveApplications` and their static variants
+bracket the complete runtime. `Operations.Runtime` shares one native drain deadline
+among participants. Bounded stores reject overload instead of silently growing.
+
+```sh
+lake build weave-platform-test weave-jobs-test weave-stream-test
+lake exe weave-platform-test
+lake exe weave-jobs-test
+lake exe weave-stream-test
+python scripts/benchmark.py --platform --iterations 5000 --output benchmarks/platform-results.json
+```
+
+[The 27-item acceptance register](docs/platform/acceptance.json) links each requested
+platform feature to its implementation and evidence. Reports state their actual
+platform and source hashes; passing local evidence does not assert unrun CI or
+cluster failover guarantees. Live state is owner-local and needs one worker or
+sticky routing; distributed PubSub and presence have separate consistency rules.

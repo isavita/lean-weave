@@ -1,0 +1,14 @@
+{
+  "passed": true,
+  "kind": "real PostgreSQL TLS with non-superuser FORCE RLS",
+  "tenant_isolation": true,
+  "pool_scope_reset": true,
+  "parameter_injection_rejected": true,
+  "tenant_override_rejected": true,
+  "actual_migration_helper_executed": true,
+  "escaped_connection_reborrow_rejected": true,
+  "escaped_tenant_scope_reborrow_rejected": true,
+  "same_physical_connection_verified": true,
+  "current_lease_preserved": true,
+  "persistent_service_started": false
+}

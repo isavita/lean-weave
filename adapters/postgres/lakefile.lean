@@ -7,7 +7,7 @@ private def pgPath (option : String) : IO System.FilePath := do
   return System.FilePath.mk output.stdout.trimAscii.toString
 
 package «lean-weave-postgres» where
-  version := v!"0.1.0"
+  version := v!"0.2.0"
   moreLinkObjs := if System.Platform.isWindows then #[`@/«libpq-import»] else #[]
   moreLinkLibs := if System.Platform.isWindows then #[] else #[`@/«libpq-shared»]
 
@@ -45,3 +45,9 @@ lean_exe «postgres-test» where
 
 lean_exe «postgres-example» where
   root := `Example
+
+lean_exe «weave-pg-tenant-test» where
+  root := `test.TenantMain
+
+lean_exe «weave-pg-jobs-test» where
+  root := `test.JobsMain

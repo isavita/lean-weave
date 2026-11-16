@@ -3,6 +3,16 @@
 Optional Redis adapter for LeanWeave. Import `LeanWeaveRedis`; declarations live
 in `LeanWeave.Redis`. The core package does not load or require this adapter.
 
+For distributed channels, construct a `PubSub.Adapter` on its native owner and
+use `adapter.channel authorize`. The resulting `Realtime.Channel` uses the same
+typed `broadcast` API as a local channel, with WS/SSE subscriptions fed by Redis
+messages. A successful `Publication` has `recipients := none`: it means an
+outgoing publication was queued, not that Redis or a remote application received
+it. PubSub is at-most-once during disconnect; presence uses periodic full CRDT
+snapshots for anti-entropy. Call `adapter.tick` from native maintenance and
+`adapter.close` from shutdown. The two-process test exercises `Channel.broadcast`
+over an isolated real Redis and observes delivery on the other node's WS/SSE.
+
 Create one `Client` in each reactor worker's application factory. Commands use
 numeric IPv4/IPv6 addresses, nonblocking connect/send/receive, and bounded RESP2.
 No DNS resolution, background tasks, subprocesses or borrowed reactor buffers

@@ -1,5 +1,6 @@
 import LeanWeavePostgres.Native
 import Std.Net.Addr
+import LeanWeave.Observability.Trace
 
 namespace LeanWeave.Postgres
 
@@ -97,8 +98,13 @@ structure Connection where
   private native : Native.Handle
   private config : Config
   private leased : IO.Ref Bool
+  /-- Physical-slot epoch plus this acquisition's immutable snapshot. An escaped
+      lease cannot become valid when the physical connection is borrowed again. -/
+  private epoch : IO.Ref Nat
+  private leaseEpoch : Nat
   private connected : IO.Ref Bool
   private failed : IO.Ref Bool
+  private trace : Option (Observability.Tracer × Option String) := none
 
 /-- Worker-local fixed-capacity pool. The waiting queue stores only resumable
     leases; saturation fails immediately with 503, without allocating a task. -/
@@ -108,6 +114,8 @@ structure Pool where
   private connections : IO.Ref (Array Connection)
   private waiting : IO.Ref Nat
   private closed : IO.Ref Bool
+  private tracer : Option Observability.Tracer := none
+  private parentTrace : Option String := none
 
 private def attemptIO (action : IO α) : IO (Except AppError α) := do
   try return .ok (← action)
@@ -118,22 +126,30 @@ private def databaseIO (action : IO α) : AppM α := do
   | .ok value => return value
   | .error error => throw error
 
-def Pool.create (config : Config := {}) : IO Pool := do
+def Pool.create (config : Config := {}) (tracer : Option Observability.Tracer := none) : IO Pool := do
   match config.validate with
   | .error message => throw (IO.userError message)
-  | .ok _ => return ⟨config, ← IO.mkRef #[], ← IO.mkRef 0, ← IO.mkRef false⟩
+  | .ok _ => return { config, connections := ← IO.mkRef #[], waiting := ← IO.mkRef 0, closed := ← IO.mkRef false, tracer }
 
-private def Connection.close (connection : Connection) : IO Unit := do
+private def Connection.closePhysical (connection : Connection) : IO Unit := do
   connection.failed.set true
+  connection.leased.set false
   connection.connected.set false
   Native.close connection.native
+
+private def Connection.isCurrent (connection : Connection) : IO Bool := do
+  return (← connection.leased.get) && !(← connection.failed.get) &&
+    (← connection.epoch.get) == connection.leaseEpoch
+
+private def Connection.close (connection : Connection) : IO Unit := do
+  if ← connection.isCurrent then connection.closePhysical
 
 /-- Immediate, idempotent closure cancels leases and releases every database socket. -/
 def Pool.close (pool : Pool) : IO Unit := do
   pool.closed.set true
   let connections ← pool.connections.get
   pool.connections.set #[]
-  for connection in connections do connection.close
+  for connection in connections do connection.closePhysical
 
 private def Pool.tryAcquire (pool : Pool) : IO (Option Connection) := do
   if ← pool.closed.get then throw (IO.userError "PostgreSQL pool is closed")
@@ -141,15 +157,21 @@ private def Pool.tryAcquire (pool : Pool) : IO (Option Connection) := do
   let mut available : Option Connection := none
   for connection in ← pool.connections.get do
     unless ← connection.failed.get do
-      live := live.push connection
       if available.isNone && !(← connection.leased.get) then
-        connection.leased.set true
-        available := some connection
+        let previous ← connection.epoch.get
+        if previous >= 9223372036854775807 then connection.closePhysical
+        else
+          let epoch := previous + 1
+          connection.epoch.set epoch
+          connection.leased.set true
+          available := some { connection with leaseEpoch := epoch }
+      unless ← connection.failed.get do live := live.push connection
   pool.connections.set live
   if available.isSome then return available
   if live.size >= pool.config.maxConnections then return none
   let native ← Native.start pool.config.options
-  let connection := Connection.mk native pool.config (← IO.mkRef true) (← IO.mkRef false) (← IO.mkRef false)
+  let connection := Connection.mk native pool.config (← IO.mkRef true) (← IO.mkRef 1) 1
+    (← IO.mkRef false) (← IO.mkRef false) none
   pool.connections.set (live.push connection)
   return some connection
 
@@ -173,10 +195,14 @@ private def Pool.acquire (pool : Pool) : AppM Connection := do
     (fun _ => release) pool.config.connectTimeoutMs 128) release
 
 private def Connection.ensureConnected (connection : Connection) : AppM Unit := do
+  unless ← databaseIO connection.isCurrent do
+    throw { status := 503, message := "PostgreSQL lease is no longer active" }
   unless ← databaseIO connection.connected.get do
     AppM.await
       (do
         try
+          unless ← connection.isCurrent do
+            return some (.error { status := 503, message := "PostgreSQL lease is no longer active" })
           if ← Native.connectPoll connection.native then
             connection.connected.set true
             return some (.ok ())
@@ -187,21 +213,28 @@ private def Connection.ensureConnected (connection : Connection) : AppM Unit := 
       (fun _ => connection.close) connection.config.connectTimeoutMs 8192
 
 private def Connection.release (connection : Connection) : IO Unit := do
+  unless ← connection.isCurrent do return
   let healthy ← Native.healthy connection.native
-  unless healthy do connection.close
+  unless healthy do connection.closePhysical
   connection.leased.set false
 
 /-- Run a bounded operation under a lease. Completion, failure, timeout and
     disconnect cancellation all release the lease; an open transaction is closed. -/
 def Pool.withConnection (pool : Pool) (use : Connection → AppM α) : AppM α := do
   let connection ← pool.acquire
+  let connection := { connection with trace := pool.tracer.map (fun tracer => (tracer, pool.parentTrace)) }
   AppM.ensuring (do connection.ensureConnected; use connection) connection.release
+
+/-- Clone only tracing context while sharing owner-local pool state. Construct
+per request; concurrent leases never depend on a mutable thread-local parent. -/
+def Pool.withTraceContext (pool : Pool) (context : Context) : Pool :=
+  { pool with parentTrace := Observability.traceparent context }
 
 /-- Extended-query protocol separates SQL and parameter bytes. SQL NULL is `none`.
     Results use single-row mode and enforce row, column and retained-byte bounds. -/
 def Connection.query (connection : Connection) (sql : String)
     (params : Array (Option String) := #[]) : AppM Result := do
-  unless (← databaseIO connection.leased.get) && !(← databaseIO connection.failed.get) do
+  unless ← databaseIO connection.isCurrent do
     throw { status := 503, message := "PostgreSQL lease is no longer active" }
   if sql.isEmpty || sql.utf8ByteSize > connection.config.maxQueryBytes || sql.toUTF8.toList.contains 0 then
     throw { status := 400, message := "invalid or oversized SQL statement" }
@@ -214,17 +247,33 @@ def Connection.query (connection : Connection) (sql : String)
       parameterBytes := parameterBytes + value.utf8ByteSize
   if parameterBytes > connection.config.maxParameterBytes then
     throw { status := 413, message := "SQL parameter budget exceeded" }
-  databaseIO (Native.send connection.native sql params connection.config.maxRows.toUSize
-    connection.config.maxResultBytes.toUSize connection.config.maxColumns.toUSize)
-  AppM.await
-    (do
-      try return (← Native.poll connection.native).map Except.ok
-      catch error =>
-        connection.close
-        let status := if (error.toString.splitOn "57014").length > 1 then 504 else 503
-        return some (.error { status, message := error.toString }))
-    (fun _ => connection.close) connection.config.queryTimeoutMs
-    (connection.config.maxResultBytes + parameterBytes + sql.utf8ByteSize + params.size * 64 + 256)
+  let span ← match connection.trace with
+    | some (tracer, parent) => some <$> databaseIO (tracer.start "postgres.query" parent .client #[
+      { key := "db.system.name", value := .text "postgresql" },
+      { key := "server.address", value := .text connection.config.hostName }])
+    | none => pure none
+  let finish := fun status code => do
+    if let some span := span then span.finish status #[] code
+  (do
+    try
+      databaseIO (Native.send connection.native sql params connection.config.maxRows.toUSize
+        connection.config.maxResultBytes.toUSize connection.config.maxColumns.toUSize)
+      let result ← AppM.await
+        (do
+          unless ← connection.isCurrent do
+            return some (.error { status := 503, message := "PostgreSQL lease is no longer active" })
+          try return (← Native.poll connection.native).map Except.ok
+          catch error =>
+            connection.close
+            let status := if (error.toString.splitOn "57014").length > 1 then 504 else 503
+            return some (.error { status, message := error.toString }))
+        (fun _ => connection.close) connection.config.queryTimeoutMs
+        (connection.config.maxResultBytes + parameterBytes + sql.utf8ByteSize + params.size * 64 + 256)
+      finish .unset ""
+      return result
+    catch error =>
+      finish .error "database.error"
+      throw error).ensuring (finish .error "database.cancelled_or_failed")
 
 def Pool.query (pool : Pool) (sql : String) (params : Array (Option String) := #[]) : AppM Result :=
   pool.withConnection fun connection => connection.query sql params

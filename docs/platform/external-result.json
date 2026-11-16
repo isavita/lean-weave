@@ -1,0 +1,51 @@
+{
+  "vault": {
+    "passed": true,
+    "official_binary": "Vault v1.20.0 (6fdd6b59e97d97a9e19b0fb5304bf879c190295e), built 2025-06-23T10:21:30Z",
+    "binary_sha256": "5e8c65008d5f92b1315e0b2d4ada38f1997652ce4be3f169fe8e13921aaa727d",
+    "tls_verified": true,
+    "kv2_rotation": true,
+    "bootstrap_token_rotation_and_old_revocation": true,
+    "failed_refresh_expires": true,
+    "no_persistent_service": true
+  },
+  "opentelemetry": {
+    "passed": true,
+    "official_binary": "otelcol version 0.131.0",
+    "binary_sha256": "d11027832b4f304b8d80b6eae7a41681aaa3e343b446e938ad55be9078bc69ac",
+    "transport": "native OTLP/HTTP JSON",
+    "spans_received": 6,
+    "span_names": [
+      "postgres.query",
+      "HTTP POST",
+      "postgres.query",
+      "HTTP POST",
+      "job integration",
+      "integration.request"
+    ],
+    "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+    "parent_contexts": 3,
+    "automatic_real_postgres_queries": 2,
+    "automatic_real_http_calls": 2,
+    "actual_job_execution": true,
+    "no_sql_parameters_exported": true,
+    "no_persistent_service": true
+  },
+  "source_sha256": {
+    "test/platform/external.py": "48d586aa8f2c3a9eacb118e962fc8a68945569812d0e2dac3e2780a967d367d3",
+    "integration/platform/Main.lean": "4c735fc599533293f2c532f24a448576939d5ae967f5753b0fe510a268d5d7d6",
+    "integration/platform/lake-manifest.json": "7cc3d763f2af9974e3b4db507dfd0478b7d8637326edd6991a51b4152f81b753",
+    "LeanWeave/Core/AppM.lean": "b431767c9eadaefcbd5f02e0cc06a6c370fcdabb07a04d889fbc0cd4cbfca801",
+    "LeanWeave/Core/Body.lean": "92ca432535b012037f6ed9024687f0094498f9ec4f83a05b2b98e2f3c29bd4ed",
+    "LeanWeave/Observability/Trace.lean": "36e244dbc0c328fb39025f0cd2e38146fb1229e1d6b62d068f40d2b588d40d62",
+    "LeanWeave/Observability/Export.lean": "ce72a0fc3c9549c3f64cc62e3880abd98269a556f44ba170bea5f8a7dd86fdb6",
+    "LeanWeave/Observability/Jobs.lean": "a03ac1498e68ad4fa1b77fcc52a07e185029ed4d607cc61b5299f836706cde50",
+    "LeanWeave/Secrets/Manager.lean": "e0320ef790cde7fdb72adb866ab5080f4f9bf1b66d785f9449690b33ab662b2e",
+    "adapters/postgres/LeanWeavePostgres/Pool.lean": "15c8c8979ac9cde883e88bc5e1bd52d7dec72dd2575aad93dce89dc4b9a22ee2",
+    "adapters/http/LeanWeaveHttp/Client.lean": "97dd2b866dca2fab7991e606d74c4faf0e31d50f0be033d0e0c69e8eb83af30b",
+    "adapters/http/LeanWeaveHttp/Otlp.lean": "572a1ebf1905fcd7b2ca1a4b6d581db0dd82535ffec30a7e64c0f070c1541972",
+    "adapters/http/LeanWeaveHttp/Vault.lean": "7b6be9cb3cd9acbaa539fdcbbc02c599570503cf98db4403754ad885a4bc1331",
+    "adapters/http/c/http.c": "2f7bd62966de3f57816513f4b869333be8b2b049e8018fb925054f6e899fe861"
+  },
+  "fixture_sha256": "e194d91d4972edf103ff7af8d72e0a05ee692c2c3fba42eb0a333de9778206d7"
+}
