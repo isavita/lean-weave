@@ -1,4 +1,6 @@
 import Lean
+-- Retain lean-net's native consumer link dependencies for system-compiler builds.
+import LeanNet.HTTP1.Request
 
 namespace LeanWeave.Tooling
 
