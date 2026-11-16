@@ -9,11 +9,66 @@ private def appOk (result : Except AppError α) : IO α :=
   match result with | .ok value => pure value | .error e => throw (IO.userError e.message)
 private def parseOk (result : Except String α) : IO α :=
   match result with | .ok value => pure value | .error e => throw (IO.userError e)
+private def retryBusy (action : IO (Except AppError α)) (timeoutMs : Nat := 1000) : IO α := do
+  let cutoff := (← IO.monoMsNow) + timeoutMs
+  repeat
+    match ← action with
+    | .ok value => return value
+    | .error error =>
+      unless error.status == 503 && error.message == "workflow store busy" && (← IO.monoMsNow) < cutoff do
+        throw (IO.userError error.message)
+      IO.sleep 1
+private def awaitSignal (signal : IO.Promise Unit) : IO Unit := do
+  let cutoff := (← IO.monoMsNow) + 1000
+  while !(← signal.isResolved) do
+    if (← IO.monoMsNow) >= cutoff then throw (IO.userError "workflow contention barrier deadline")
+    IO.sleep 1
 private def action (name : String) : Action := { kind := "step",payload := Lean.toJson name }
 private def saga : Plan := { name := "saga",steps := #[
   { name := "a",action := action "a",compensation := some (action "undo-a"),maxAttempts := 1 },
   { name := "b",action := action "b",dependsOn := #["a"],compensation := some (action "undo-b"),maxAttempts := 1 },
   { name := "c",action := action "fail",dependsOn := #["b"],maxAttempts := 1 }] }
+
+private def contention (registry : Jobs.Registry) : IO Unit := do
+  let engine ← Engine.create registry
+  let entered ← IO.Promise.new
+  let release ← IO.Promise.new
+  let observedBusy ← IO.Promise.new
+  -- A test-only dedicated publisher parks its observation under the workflow
+  -- publication lock. Production reactor/job callbacks are unchanged.
+  let queue ← Jobs.Queue.create registry { maxEntries := 1,maxHistory := 1 } { emit := fun _ => do
+    entered.resolve ()
+    let cutoff := (← IO.monoMsNow) + 3000
+    while !(← release.isResolved) && (← IO.monoMsNow) < cutoff do IO.sleep 1 }
+  let id ← appOk (← engine.start { name := "contention",steps := #[{ name := "a",action := action "a" }] } { tenant := "tenant-a" })
+  let publisher ← IO.asTask (engine.tick queue) Task.Priority.dedicated
+  try
+    awaitSignal entered
+    let busy ← engine.get "tenant-a" id
+    check (match busy with | .error error => error.status == 503 && error.message == "workflow store busy" | _ => false)
+      "contended snapshot fails fast before publication lock release"
+    let retrier ← IO.asTask (retryBusy do
+      let result ← engine.retryCompensation queue "tenant-b" id
+      if let .error error := result then
+        if error.status == 503 && error.message == "workflow store busy" then observedBusy.resolve ()
+      return result) Task.Priority.dedicated
+    try
+      awaitSignal observedBusy
+      release.resolve ()
+      match ← IO.wait retrier with
+      | .error error => throw error
+      | .ok accepted => check (!accepted) "bounded administrative retry preserves tenant rejection"
+    finally
+      release.resolve ()
+      let _ ← IO.wait retrier
+      pure ()
+  finally
+    release.resolve ()
+    match ← IO.wait publisher with
+    | .error error => throw error
+    | .ok result => check ((← appOk result) == 1) "one workflow action published under contention"
+  let snapshot ← appOk (← queue.snapshot)
+  check (snapshot.queued == 1) "contention retries do not duplicate admissions"
 
 /-- Execute dependent jobs, permanent failure and reverse saga compensation on
 real dedicated workers; tenant isolation and plan graph errors are checked too. -/
@@ -29,6 +84,7 @@ def run : IO Unit := do
   let cycle : Plan := { saga with steps := saga.steps.map fun (step : Step) => if step.name == "a" then { step with dependsOn := #["c"] } else step }
   check (!(cycle.validate registry).isOk) "dependency cycle rejected"
   check (!({ saga with steps := #[{ name := "x",action := action "x",dependsOn := #["missing"] }] }.validate registry).isOk) "missing dependency rejected"
+  contention registry
   let admission ← Jobs.Admission.new
   let engine ← Engine.create registry {} (some admission)
   let queue ← Jobs.Queue.create registry { maxEntries := 1,maxHistory := 1 } {} 30000 (some admission)
@@ -67,6 +123,7 @@ def run : IO Unit := do
       IO.sleep 1
   Jobs.withWorkers (fun _ => pure (retryEngine.backend retryQueue,retriableRegistry)) (fun workers => do
     waitStatus .compensationFailed
+    check (!(← retryBusy (retryEngine.retryCompensation retryQueue "tenant-b" retryId))) "retry tenant isolated while compensation is retriable"
     enabled.atomically (set true)
     let cutoff := (← IO.monoMsNow) + 1000
     repeat
@@ -77,7 +134,6 @@ def run : IO Unit := do
         unless error.status == 503 && (← IO.monoMsNow) < cutoff do throw (IO.userError error.message)
         IO.sleep 1
     waitStatus .failed
-    check (← appOk (← retryEngine.retryCompensation retryQueue "tenant-b" retryId) >>= fun accepted => pure (!accepted)) "retry tenant isolated"
     check (← workers.drain 1000).drained "retried compensation drains"
   ) { workers := 4,pollMs := 1 } {} (some retryQueue.admission)
   IO.println "workflow DAG/dependency/compensation/serialization/tenant checks passed"

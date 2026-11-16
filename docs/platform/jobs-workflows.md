@@ -126,6 +126,11 @@ the resulting transition atomically with respect to retained job history, then
 retries persisted ready actions under queue backpressure. Keep the engine and
 queue admission gate shared. Use `Engine.cancel`, rather than independently
 deleting or retrying a workflow-owned job.
+Local administrative reads and mutations also acquire their store without
+waiting. Concurrent reconciliation can return 503 `workflow store busy`; callers
+may retry that contention within one absolute deadline. A busy result applies no
+administrative mutation. Dedicated workers already treat transient claim/busy
+failures as pending work and continue polling within their drain deadline.
 
 PostgreSQL uses a terminal-job trigger to append a workflow transition event in
 the **same transaction as the acknowledgement**. Reconciliation locks each flow,
