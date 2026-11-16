@@ -122,7 +122,7 @@ def securityTests : IO Unit := do
     calls.modify (· + 1)
     pure ((Response.text "public").withHeader "cache-control" "public, max-age=30")
   let responses ← Cache.Store.new
-  let cached := Cache.middleware responses {} generating
+  let cached := Cache.middleware responses { admit := some (fun ctx => pure (.cache ctx "public:test")) } generating
   let first ← ok (← (cached context).run)
   let second ← ok (← (cached context).run)
   check ((← calls.get) == 1 && first.body == second.body) "public cache hit"
@@ -132,6 +132,50 @@ def securityTests : IO Unit := do
   let conditional := { context with request := { context.request with headers := context.request.headers.push (header "if-none-match" ((first.getHeader "etag").getD "")) } }
   let notModified ← ok (← (cached conditional).run)
   check (notModified.status == 304 && notModified.body.isEmpty) "conditional GET"
+  let tenantCalls ← IO.mkRef 0
+  let tenantBody : Handler := fun c => do
+    tenantCalls.modify (· + 1)
+    pure ((Response.text (c.tenant ++ ":" ++ toString (← tenantCalls.get))).withHeader "cache-control" "public, max-age=30")
+  let tenantHeader := fun (name : String) => { context with request := { context.request with headers := context.request.headers.push (header "x-tenant-id" name) } }
+  let alphaCtx := tenantHeader "alpha"
+  let betaCtx := tenantHeader "beta"
+  let unsafeStore ← Cache.Store.new
+  let unsafeOrder := Cache.middleware unsafeStore {} (Tenant.middleware (Tenant.fromHeader) (fun _ _ => pure true) tenantBody)
+  let unsafeAlpha ← ok (← (unsafeOrder alphaCtx).run)
+  let unsafeBeta ← ok (← (unsafeOrder betaCtx).run)
+  check (unsafeAlpha.body != unsafeBeta.body && (← status unsafeOrder context) == 404) "unadmitted outer cache cannot bypass tenant resolution"
+  check ((← unsafeStore.state.get).entries.isEmpty) "default cache policy never stores before admission"
+  let admittedStore ← Cache.Store.new
+  let access ← IO.mkRef true
+  let admitted := Cache.middleware admittedStore { admit := some (fun c => do
+    let some resolution ← Tenant.fromHeader "x-tenant-id" c | throw { status := 404, message := "tenant not found" }
+    unless ← access.get do throw { status := 403, message := "tenant access denied" }
+    let verified := { c with tenant := resolution.id.value }
+    return .cache verified ("tenant:" ++ resolution.id.value)) } tenantBody
+  let admittedAlpha ← ok (← (admitted alphaCtx).run)
+  let admittedAlphaHit ← ok (← (admitted alphaCtx).run)
+  let admittedBeta ← ok (← (admitted betaCtx).run)
+  check (admittedAlpha.body == admittedAlphaHit.body && admittedAlpha.body != admittedBeta.body) "admitted cache isolates verified tenants"
+  check ((← status admitted context) == 404) "admission still rejects missing tenant after cache fill"
+  access.set false
+  check ((← status admitted alphaCtx) == 403) "authorization revocation runs before cache hit"
+  let bypassed := Cache.middleware admittedStore { admit := some (fun c => pure (.bypass { c with locale := "fr" })) }
+    (fun c => pure (Response.text c.locale))
+  let bypassResponse ← ok (← (bypassed context).run)
+  check (String.fromUTF8! bypassResponse.body == "fr") "cache bypass retains admitted context changes"
+  let fragmentStore ← Cache.Store.new
+  let fragmentCalls ← IO.mkRef 0
+  let fragmentGenerate : Context → AppM ByteArray := fun c => do
+    fragmentCalls.modify (· + 1)
+    pure (c.tenant ++ ":" ++ toString (← fragmentCalls.get)).toUTF8
+  let fragmentPolicy : Cache.Policy := { admit := some (fun c =>
+    if c.tenant.isEmpty then pure (.bypass c) else pure (.cache c ("tenant:" ++ c.tenant))) }
+  let fragmentAlpha := { context with tenant := "alpha" }
+  let fragmentBeta := { context with tenant := "beta" }
+  let firstFragment ← ok (← (Cache.requestFragment fragmentStore fragmentAlpha "card" fragmentGenerate fragmentPolicy).run)
+  let secondFragment ← ok (← (Cache.requestFragment fragmentStore fragmentAlpha "card" fragmentGenerate fragmentPolicy).run)
+  let betaFragment ← ok (← (Cache.requestFragment fragmentStore fragmentBeta "card" fragmentGenerate fragmentPolicy).run)
+  check (firstFragment == secondFragment && firstFragment != betaFragment && (← fragmentCalls.get) == 2) "request fragments use admitted tenant scope"
   for other in [ { context with authenticated := true }, { context with sessionId := some one.id },
       { context with request := { context.request with headers := context.request.headers.push (header "authorization" "Bearer x") } },
       { context with request := { context.request with headers := context.request.headers.push (header "cookie" "a=b") } } ] do

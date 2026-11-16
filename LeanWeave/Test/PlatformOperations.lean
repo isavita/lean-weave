@@ -80,7 +80,7 @@ private def cacheIsolation : IO Unit := do
   check (Cache.responseKey { ctx with request := { ctx.request with target := "/dashboard?q=a+b".toUTF8 } } {} !=
     Cache.responseKey { ctx with request := { ctx.request with target := "/dashboard?q=a%2Bb".toUTF8 } } {}) "raw target avoids protocol-specific query decoding collisions"
   let calls ← IO.mkRef 0
-  let handler := Cache.middleware store {} fun _ => do
+  let handler := Cache.middleware store { admit := some (fun ctx => pure (.cache ctx ("tenant:" ++ ctx.tenant))) } fun _ => do
     calls.modify (· + 1)
     return (Response.text (toString (← calls.get))).withHeader "cache-control" "public, max-age=60"
   let run : Context → IO String := fun c => do return String.fromUTF8! (← require (← (handler c).run)).body
@@ -101,8 +101,9 @@ private def cspCacheIsolation : IO Unit := do
   let origin : Handler := fun ctx => pure ((Response.text ((Security.Csp.nonce ctx).getD "missing")).withHeader "cache-control" "public, max-age=60")
   for outside in [true,false] do
     let store ← Cache.Store.new
-    let handler := if outside then Cache.middleware store {} (Security.Csp.middleware policy origin)
-      else Security.Csp.middleware policy (Cache.middleware store {} origin)
+    let cachePolicy : Cache.Policy := { admit := some (fun ctx => pure (.cache ctx "public:csp")) }
+    let handler := if outside then Cache.middleware store cachePolicy (Security.Csp.middleware policy origin)
+      else Security.Csp.middleware policy (Cache.middleware store cachePolicy origin)
     let first ← require (← (handler ctx).run)
     let second ← require (← (handler ctx).run)
     check (first.body != second.body) "CSP/cache middleware order cannot reuse a nonce"
@@ -111,7 +112,7 @@ private def cspCacheIsolation : IO Unit := do
     check ((← store.state.get).entries.isEmpty) "nonce-bearing response was stored"
   let store ← Cache.Store.new
   let fragment : Handler := fun ctx => do
-    let bytes ← Cache.requestFragment store ctx "nonce" (pure ((Security.Csp.nonce ctx).getD "missing").toUTF8)
+    let bytes ← Cache.requestFragment store ctx "nonce" (fun c => pure ((Security.Csp.nonce c).getD "missing").toUTF8)
     return Response.text (String.fromUTF8! bytes)
   let handler := Security.Csp.middleware policy fragment
   let first ← require (← (handler ctx).run)

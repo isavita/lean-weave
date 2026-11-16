@@ -15,8 +15,10 @@ structure WebSocketConfig where
   maxQueuedMessages : Nat := 32
   maxQueuedBytes : Nat := 262144
   maxMessageBytes : Nat := 65536
-  /-- Verify connection_init credentials and return verified application context. -/
-  authorize : Context → Lean.Json → IO (Except String Context) := fun ctx _ => pure (.ok ctx)
+  /-- Verify connection_init credentials and return verified application context.
+      No policy is configured by default, so initialization is denied. -/
+  authorize : Context → Lean.Json → IO (Except String Context) :=
+    fun _ _ => pure (.error "GraphQL WebSocket authorization policy required")
 
 private structure Active where
   id : String

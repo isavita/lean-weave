@@ -36,9 +36,13 @@ AST and accumulated output while awaiting; the native fixture reserves 1MiB.
 Response byte, expansion, token, depth and subscription source limits are explicit.
 
 `graphql-transport-ws` supports init/ack, subscribe, next/error/complete, ping/pong,
-initialization timeout, exact Origin/subprotocol checks and cancellation. Supply
-WebSocketConfig.authorize to verify connection_init credentials and return verified
-Context. No authentication is inferred from untrusted payload fields. Operations
+initialization timeout, exact Origin/subprotocol checks and cancellation.
+HTTP handler middleware does not run on WebSocket upgrades. By default,
+`WebSocketConfig.authorize` denies `connection_init` with close code 4403.
+Supply an authorizer that verifies credentials and returns a verified Context;
+for an intentionally public schema, explicitly return `.ok ctx`.
+Origin and subprotocol checks do not authenticate a client, and no authentication
+is inferred from untrusted payload fields. Operations
 and outboxes have count/byte limits, round-robin polling and absolute deadlines.
 Client completion, errors, timeout, disconnect and shutdown close sources once;
 late await results cannot revive a cancelled operation. A connection's state and
