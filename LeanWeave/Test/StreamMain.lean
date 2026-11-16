@@ -68,6 +68,30 @@ private def pubsub : IO Unit := do
   check (match ← one.poll with | some (.closed .overflow) => true | _ => false) "slow subscriber not closed"
   let _ ← two.close
 
+  let channel : Realtime.Channel := { broker, authorize := fun ctx topic => pure (ctx.authenticated && topic == "room") }
+  let ctx : Context := { request := { method := "GET",target := "/".toUTF8,headers := #[],body := ByteArray.empty } }
+  check (!(← channel.join ctx "room").isOk) "unauthenticated channel join accepted"
+  check (!(← channel.sse ctx "room").isOk) "unauthenticated SSE channel accepted"
+  check (!(← channel.webSocket ctx "room").isOk) "unauthenticated WS channel accepted"
+  let sub ← ok (← channel.join { ctx with authenticated := true } "room")
+  let localReceipt ← ok (← channel.broadcast "room" "change" (42 : Nat))
+  check (localReceipt.recipients == some 1) "local channel publication receipt"
+  check (match ← sub.poll with | some (.message m) => m.payload == Lean.toJson (42 : Nat) | _ => false) "local channel typed payload"
+  let sent ← IO.mkRef (#[] : Array Realtime.Message)
+  let custom := { channel with publisher := some (fun message => do sent.modify (·.push message); return .ok {}) }
+  let queued ← ok (← custom.broadcast "room" "remote" (43 : Nat))
+  check queued.recipients.isNone "distributed receipt invented recipient count"
+  check ((← sent.get).size == 1 && (← sent.get)[0]!.payload == Lean.toJson (43 : Nat)) "custom publisher not selected"
+  check (← sub.poll).isNone "custom publish duplicated immediate local fanout"
+  check (!(← custom.broadcast "" "remote" ()).isOk) "custom publisher bypassed topic validation"
+  check (!(← custom.broadcast "room" "bad\nevent" ()).isOk) "custom publisher bypassed event validation"
+  check (!(← custom.broadcast "room" "remote" (String.ofList (List.replicate 1024 'x'))).isOk) "custom publisher bypassed byte budget"
+  check ((← sent.get).size == 1) "invalid message reached custom publisher"
+  let rejecting := { channel with publisher := some (fun _ => pure (.error "transport full")) }
+  check (!(← rejecting.broadcast "room" "remote" ()).isOk) "publisher rejection silently fell back to local"
+  check (← sub.poll).isNone "rejected publish produced local delivery"
+  let _ ← sub.close
+
 private def present (replica : Presence.Replica) (key : String) : IO Bool := do
   return (← replica.list "room").any (·.1 == key)
 

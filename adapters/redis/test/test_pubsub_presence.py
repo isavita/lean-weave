@@ -2,6 +2,8 @@
 """Two independent native LeanWeave nodes over an isolated real Redis server."""
 import http.client
 import json
+import hashlib
+import platform
 from pathlib import Path
 import shutil
 import signal
@@ -91,7 +93,8 @@ class DistributedRealtime(unittest.TestCase):
         connection.request('GET', '/events')
         response = connection.getresponse()
         self.assertEqual(response.status, 200)
-        self.assertEqual(self.get(self.a, '/publish', value='from-node-a'), 'queued')
+        receipt = json.loads(self.get(self.a, '/broadcast', value='from-node-a'))
+        self.assertEqual(receipt, {'queued': True, 'recipients': None})
         for _ in range(30):
             line = response.readline().decode()
             if line.startswith('data: '):
@@ -117,4 +120,18 @@ class DistributedRealtime(unittest.TestCase):
         self.assertGreaterEqual(json.loads(self.get(self.b, '/stats'))['reconnects'], 2)
 
 
-if __name__ == '__main__': unittest.main()
+if __name__ == '__main__':
+    result = unittest.main(exit=False).result
+    if not result.wasSuccessful(): sys.exit(1)
+    source = ROOT.parents[1]
+    files = [source / 'LeanWeave/Realtime/Channel.lean', source / 'LeanWeave/Realtime/PubSub.lean',
+             source / 'LeanWeave/Presence.lean', ROOT / 'LeanWeaveRedis/PubSub.lean',
+             ROOT / 'test/PubSubFixture.lean', Path(__file__).resolve()]
+    (ROOT / 'test/pubsub-presence-result.json').write_text(json.dumps({
+        'passed': True, 'platform': platform.platform(), 'native_processes': 2,
+        'tests': result.testsRun, 'actual_channel_broadcast_via_redis': True,
+        'receipt_is_queue_admission_not_delivery_ack': True,
+        'sse_remote_delivery_observed': True, 'presence_partition_rejoin_leave': True,
+        'persistent_service_started': False,
+        'sources_sha256': {str(p.relative_to(source)): hashlib.sha256(p.read_bytes()).hexdigest() for p in files}
+    }, indent=2) + '\n')

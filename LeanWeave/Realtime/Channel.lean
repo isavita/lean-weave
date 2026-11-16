@@ -4,19 +4,51 @@ import LeanNet.WebSocket.Application
 
 namespace LeanWeave.Realtime
 
+/-- Successful admission receipt, not an end-to-end delivery acknowledgement.
+Local fanout can report the number of subscriber queues that accepted a message;
+distributed transports may know only that an outgoing publication was queued. -/
+structure Publication where
+  recipients : Option Nat := none
+  deriving Repr, BEq, Inhabited
+
+/-- A nonblocking owner-local transport publisher. Exceptions/rejection must not
+be interpreted as a remote acknowledgement or silently fall back to local fanout. -/
+abbrev Publisher := Message → IO (Except String Publication)
+
+def Message.validate (message : Message) (maximumBytes : Nat) : Except String Unit := do
+  let validName := fun (value : String) => !value.isEmpty && value.utf8ByteSize <= 256 &&
+    value.toUTF8.data.all (fun b => b >= 32 && b != 127)
+  if !validName message.topic || !validName message.event then throw "invalid channel topic/event"
+  if message.encode.size > maximumBytes then throw "channel message exceeds byte bound"
+
+def Broker.publisher (broker : Broker) : Publisher := fun message => do
+  return (← broker.publish message).map fun count => { recipients := some count }
+
 /-- Authorization is checked before joining either transport. The callback
 must use verified context/session claims rather than a client-supplied topic. -/
 structure Channel where
   broker : Broker
   authorize : Context → String → IO Bool
+  /-- Select local or distributed publication independently of WS/SSE delivery.
+      None preserves local Broker.publish behavior. Construct per transport owner. -/
+  publisher : Option Publisher := none
 
 def Channel.join (channel : Channel) (ctx : Context) (topic : String) : IO (Except String Subscription) := do
   if !(← channel.authorize ctx topic) then return .error "channel authorization denied"
   channel.broker.subscribe topic
 
-/-- A channel is transport-independent; typed publishers serialize explicitly. -/
-def Channel.broadcast [Lean.ToJson α] (channel : Channel) (topic event : String) (value : α) : IO (Except String Nat) :=
-  channel.broker.publish ⟨topic, event, Lean.toJson value⟩
+/-- Trusted server-side producers select one publication transport. Authorization
+for incoming WS/SSE joins remains independent; validate command authorization
+before calling broadcast on behalf of a client. Bounds apply before custom hooks. -/
+def Channel.publish (channel : Channel) (message : Message) : IO (Except String Publication) := do
+  if let .error error := message.validate channel.broker.limits.maxMessageBytes then return .error error
+  try (channel.publisher.getD channel.broker.publisher) message
+  catch _ => return .error "channel publisher failed"
+
+/-- Typed transport-independent publishing. A queued Redis publication has no
+known recipient count; a local publication reports accepted subscriber queues. -/
+def Channel.broadcast [Lean.ToJson α] (channel : Channel) (topic event : String) (value : α) : IO (Except String Publication) :=
+  channel.publish ⟨topic, event, Lean.toJson value⟩
 
 def Channel.webSocket (channel : Channel) (ctx : Context) (topic : String)
     (receive : Message → IO (Option Message) := fun _ => pure none)

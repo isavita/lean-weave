@@ -13,7 +13,7 @@ private def application (port : UInt16) (actor : String) : IO Server.Application
   let adapter ← Redis.PubSub.Adapter.new broker { port, channel := "leanweave:acceptance:pubsub", maxMessageBytes := 32768, reconnectMs := 10 }
   let replica ← Presence.Replica.new actor { maxEntries := 64, maxSnapshotBytes := 16384, leaseMs := 120, heartbeatMs := 20 }
   let cluster ← Presence.Cluster.new replica broker adapter.publish
-  let channel : Realtime.Channel := { broker, authorize := fun _ _ => pure true }
+  let channel := adapter.channel (fun _ _ => pure true)
   let partitionUntil ← IO.mkRef (0 : Nat)
   let handler : Handler := fun ctx => do
     let path := ctx.path.toList
@@ -23,9 +23,11 @@ private def application (port : UInt16) (actor : String) : IO Server.Application
       partitionUntil.set (now + 350)
       adapter.disconnect now
       return Response.text "partitioned"
-    if path == ["publish"] then
-      let queued ← adapter.publish ⟨"room", "message", .str (query ctx "value")⟩
-      return Response.text (if queued then "queued" else "rejected")
+    if path == ["broadcast"] then
+      match ← channel.broadcast "room" "message" (query ctx "value") with
+      | .error message => throw { status := 503,message }
+      | .ok receipt => return Response.json (Lean.Json.mkObj [
+          ("queued",Lean.toJson true),("recipients",Lean.toJson receipt.recipients)])
     if path == ["events"] then
       match ← channel.sse ctx "room" 30 with
       | .ok response => return response

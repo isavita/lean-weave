@@ -14,6 +14,21 @@ UTF-8/JSON validated and restricted to the joined topic. Consumers use `onPoll`
 for asynchronous pushes. Ephemeral PubSub does not claim durable replay; use
 `SSE.Store` for bounded Last-Event-ID replay and explicit replay-gap resets.
 
+`Channel.broadcast` selects a `Publisher` while its WS/SSE subscriptions consume
+the same local broker. The default publisher uses `Broker.publish` and returns a
+`Publication` with the number of local subscriber queues that accepted the
+message. A distributed publisher returns `recipients := none` when that count is
+unknown. A successful receipt means queue admission; it never acknowledges remote
+subscriber/application delivery. Name/byte bounds run before a custom publisher,
+and transport rejection does not fall back to local fanout. Publishing is a
+trusted server capability: authorize client commands before broadcasting them.
+
+`Redis.PubSub.Adapter.channel authorize` supplies the Redis publisher and its
+Redis-fed local broker. The same typed `channel.broadcast topic event value`
+therefore crosses nodes; Redis echoes it to the publishing node too, preventing
+an extra immediate local copy. `Adapter.publisher` can be supplied explicitly
+when constructing a channel. Both hooks stay on the native adapter owner.
+
 `Presence.Replica` is a dotted observed-remove CRDT with periodic full snapshots.
 Concurrent state merges preserve unseen dots and remove observed deleted dots.
 Track each connection separately with `trackConnection`; `list` returns metadata

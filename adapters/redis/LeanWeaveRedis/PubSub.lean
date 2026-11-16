@@ -1,4 +1,4 @@
-import LeanWeave.Realtime.PubSub
+import LeanWeave.Realtime.Channel
 import LeanWeaveRedis.Client
 
 namespace LeanWeave.Redis.PubSub
@@ -83,6 +83,7 @@ def Adapter.statistics (adapter : Adapter) : IO (Nat × Nat × Nat) := do
 /-- Queues one PUBLISH. Redis delivers it to this node too, avoiding duplicate
 local delivery. True means queued, not remote application acknowledgement. -/
 def Adapter.publish (adapter : Adapter) (message : LeanWeave.Realtime.Message) : IO Bool := do
+  if !(message.validate adapter.config.maxMessageBytes).isOk then return false
   let bytes := message.encode
   let state ← adapter.state.get
   if state.closed || bytes.size > adapter.config.maxMessageBytes ||
@@ -100,6 +101,18 @@ def Adapter.publish (adapter : Adapter) (message : LeanWeave.Realtime.Message) :
       bytes := query.size }
     pendingBytes := state.pendingBytes + query.size }
   return true
+
+/-- Accepted means queued on this owner; Redis PUBLISH completion and remote
+subscriber/application delivery are not acknowledged by this receipt. -/
+def Adapter.publisher (adapter : Adapter) : LeanWeave.Realtime.Publisher := fun message => do
+  if ← adapter.publish message then return .ok {}
+  return .error "Redis publication capacity unavailable"
+
+/-- One Channel API for distributed publication and Redis-fed local WS/SSE
+subscriptions. Redis echoes the publication back to this broker once, avoiding
+an additional immediate local copy. Construct on the adapter's native owner. -/
+def Adapter.channel (adapter : Adapter) (authorize : Context → String → IO Bool) : LeanWeave.Realtime.Channel :=
+  { broker := adapter.broker,authorize,publisher := some adapter.publisher }
 
 private def valueText : Value → Option String
   | .bulk (some bytes) => String.fromUTF8? bytes
