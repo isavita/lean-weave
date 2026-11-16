@@ -9,7 +9,7 @@ path = "../.."
 [[require]]
 name = "lean-net-tls"
 git = "https://github.com/isavita/lean-net.git"
-rev = "38cc472bdf48dde5170ae012988bed469c5ab5c0"
+rev = "c66fd080b7c748a01cfa72868b05023d5a6c8045"
 subDir = "tls"
 
 [[lean_lib]]

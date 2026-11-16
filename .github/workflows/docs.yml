@@ -25,7 +25,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Install native documentation build dependencies
-        run: sudo apt-get update && sudo apt-get install -y libgmp-dev libuv1-dev libssl-dev zlib1g-dev libbrotli-dev pkg-config
+        run: sudo apt-get update && sudo apt-get install -y libgmp-dev libuv1-dev libssl-dev libpq-dev zlib1g-dev libbrotli-dev pkg-config
       - uses: leanprover/lean-action@v1
         with:
           auto-config: false
@@ -45,6 +45,10 @@ jobs:
           test -s docs/.lake/build/doc/LeanWeave/Cache/Response.html
           test -s docs/.lake/build/doc/LeanWeave/Session/Store.html
           test -s docs/.lake/build/doc/LeanWeave/Middleware/Basic.html
+          test -s docs/.lake/build/doc/LeanWeavePostgres/Pool.html
+          test -s docs/.lake/build/doc/LeanWeaveRedis/Client.html
+          test -s docs/.lake/build/doc/LeanWeaveRedis/Cache.html
+          test -s docs/.lake/build/doc/LeanWeaveTLS.html
           python3 docs/prepare_site.py
           touch docs/.lake/build/doc/.nojekyll
       - name: Upload Pages artifact

@@ -10,8 +10,8 @@ mounted directory redirects. Application global header checks run first.
 The optional [TLS adapter](../adapters/tls/README.md) exports `LeanWeave.TLS.serve`,
 `serveManaged`, `serveStatic` and `serveStaticManaged` using the same APIs with
 lean-net TLS configuration. It retains ALPN, dedicated native TLS workers, mTLS,
-certificate reload and bounded graceful draining. Use OpenSSL 1.1.1 or 3.x;
-upstream OpenSSL4 deprecations currently prevent its strict native build.
+certificate reload and bounded graceful draining. Use OpenSSL 1.1.1 or newer; the pinned native TLS implementation supports
+OpenSSL 3.x and 4.x certificate identity APIs.
 
 `Server.Config.net` is the existing lean-net `ReactorServerConfig`: admission,
 connection/body/output budgets, HTTP/2 flow control, logging, metrics, rate limits

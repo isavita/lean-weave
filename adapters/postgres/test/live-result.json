@@ -14,5 +14,18 @@
   "tls_verified": true,
   "tls_hostname_mismatch_rejected": true,
   "managed_http_pool_shutdown": true,
-  "persistent_service_started": false
+  "persistent_service_started": false,
+  "managed_shutdown_observation": {
+    "deadline_seconds": 5,
+    "observations": 4,
+    "elapsed_seconds": 0.331186,
+    "initial_backends": [
+      {
+        "pid": 99820,
+        "state": "active",
+        "wait_event_type": "Timeout",
+        "wait_event": "PgSleep"
+      }
+    ]
+  }
 }

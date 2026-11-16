@@ -5,9 +5,9 @@ OpenSSL. This package wraps the matching pinned `lean-net-tls` revision and keep
 ALPN, mTLS, certificate reload, bounded TLS queues and encrypted file output in
 lean-net's native TLS workers.
 
-Install OpenSSL 1.1.1 or 3.x development libraries, plus the core's zlib/Brotli
-requirements. On macOS select OpenSSL 3 explicitly (the pinned lean-net native
-code does not yet build with OpenSSL 4's new deprecation warnings):
+Install OpenSSL 1.1.1 or newer development libraries, plus the core's zlib/Brotli
+requirements. The pinned native implementation supports OpenSSL 3.x and 4.x
+certificate identity APIs. On macOS, this reproducible setup selects OpenSSL 3:
 
 ```sh
 export PKG_CONFIG_PATH="$(brew --prefix zlib)/lib/pkgconfig:$(brew --prefix openssl@3)/lib/pkgconfig:${PKG_CONFIG_PATH:-}"

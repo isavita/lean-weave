@@ -79,8 +79,8 @@ callback; result arrival is checked cooperatively without blocking the worker.
 Cancellation drops the connection instead of using libpq's blocking cancel API.
 PostgreSQL rolls back an open transaction when it observes the disconnect; the
 server-side statement deadline also limits abandoned work. If a connection fails
-while COMMIT is in flight, commit outcome can be unknown; applications needing safe
-retries should use idempotency keys.
+while COMMIT or an autocommit mutation is in flight, commit outcome can be unknown;
+applications needing safe retries should use idempotency keys.
 
 ## Transactions and migrations
 

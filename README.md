@@ -108,7 +108,7 @@ The routing, ordered pipeline and caching designs draw on
 
 - [Redis](adapters/redis/README.md): deferred, bounded RESP operations and distributed fill leases.
 - [PostgreSQL](adapters/postgres/README.md): nonblocking libpq pools, parameterized queries, transactions and migrations.
-- [TLS](adapters/tls/README.md): optional wrappers use lean-net's native TLS worker, ALPN and certificate reload. OpenSSL 1.1.1/3.x is required.
+- [TLS](adapters/tls/README.md): optional wrappers use lean-net's native TLS worker, ALPN and certificate reload. OpenSSL 1.1.1 or newer is required; 3.x and 4.x are tested.
 - Compressed static files: `Server.serveStatic` mounts a sealed catalog with gzip/Brotli and file regions; [composition](docs/transport.md).
 - Admission/rate limits, access logs and Prometheus metrics use `Server.Config.net`.
 

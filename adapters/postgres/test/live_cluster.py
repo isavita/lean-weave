@@ -13,6 +13,42 @@ import urllib.parse
 import urllib.request
 
 
+def wait_for_database_disconnects(binary_dir, port, timeout=5):
+    """Require remote backend cleanup after local owner finalizers have run.
+
+    Earlier cancelled pg_sleep requests use the same application_name. Their
+    server backends can remain active until PostgreSQL observes the disconnect
+    or its statement deadline, even after the client's descriptors are closed.
+    Fresh psql sessions avoid reusing a cached statistics snapshot.
+    """
+    query = (
+        "SELECT COALESCE(json_agg(json_build_object('pid', pid, 'state', state, "
+        "'wait_event_type', wait_event_type, 'wait_event', wait_event)), '[]'::json) "
+        "FROM pg_stat_activity WHERE application_name = 'lean-weave' AND pid <> pg_backend_pid()"
+    )
+    command = [str(binary_dir / "psql"), "-X", "-w", "-h", "127.0.0.1", "-p", str(port),
+               "-U", "postgres", "-d", "postgres", "-At", "-c", query]
+    environment = dict(os.environ, PGSSLMODE="disable", PGAPPNAME="leanweave-shutdown-observer")
+    started = time.monotonic()
+    deadline = started + timeout
+    observations = 0
+    initial = None
+    pending = []
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise AssertionError("managed worker drain left database backends after "
+                                 f"{timeout}s: {json.dumps(pending)}")
+        pending = json.loads(subprocess.check_output(command, env=environment, text=True, timeout=remaining))
+        observations += 1
+        if initial is None:
+            initial = pending
+        if not pending:
+            return {"deadline_seconds": timeout, "observations": observations,
+                    "elapsed_seconds": round(time.monotonic() - started, 6), "initial_backends": initial}
+        time.sleep(min(.05, max(0, deadline - time.monotonic())))
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--pg-bin", default=os.environ.get("WEAVE_PG_BIN", ""))
@@ -84,11 +120,7 @@ def main():
                     stdout, stderr = process.communicate(timeout=10)
                     if process.returncode != 0:
                         raise AssertionError(f"managed example shutdown failed ({process.returncode}): {stderr}\n{stdout}")
-                remaining = subprocess.check_output([str(binary_dir / "psql"), "-h", "127.0.0.1", "-p", str(port),
-                    "-U", "postgres", "-d", "postgres", "-At", "-c",
-                    "SELECT count(*) FROM pg_stat_activity WHERE application_name = 'lean-weave'"],
-                    env=dict(os.environ, PGSSLMODE="disable"), text=True).strip()
-                assert remaining == "0", "managed worker drain must close every database pool"
+                shutdown_observation = wait_for_database_disconnects(binary_dir, port)
             version = subprocess.check_output([str(binary_dir / "postgres"), "--version"], text=True).strip()
             report = {"passed": True, "kind": "real PostgreSQL in disposable localhost cluster", "version": version,
                       "parameter_separation": True, "transaction_rollback_commit": True, "migration_idempotence": True,
@@ -98,6 +130,8 @@ def main():
                       "migration_checksum_drift_rejected": True, "tls_verified": args.tls,
                       "tls_hostname_mismatch_rejected": args.tls, "managed_http_pool_shutdown": args.example,
                       "persistent_service_started": False}
+            if args.example:
+                report["managed_shutdown_observation"] = shutdown_observation
             pathlib.Path(args.report).write_text(json.dumps(report, indent=2) + "\n")
             print(json.dumps(report, indent=2))
         finally:

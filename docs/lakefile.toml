@@ -14,3 +14,22 @@ rev = "0e1ffe2e4ba5ecfdfaf15c65b8d3805dbb7134ae"
 [[require]]
 name = "lean-weave"
 path = ".."
+
+[[require]]
+name = "lean-weave-postgres"
+path = "../adapters/postgres"
+
+[[require]]
+name = "lean-weave-redis"
+path = "../adapters/redis"
+
+[[require]]
+name = "lean-weave-tls"
+path = "../adapters/tls"
+
+# Select the shared native package directly. TLS's own ../ dependency must not
+# inherit a path into an adapter's ignored .lake directory in clean doc builds.
+[[require]]
+name = "lean-net"
+git = "https://github.com/isavita/lean-net.git"
+rev = "c66fd080b7c748a01cfa72868b05023d5a6c8045"
