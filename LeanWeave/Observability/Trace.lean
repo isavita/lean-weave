@@ -133,6 +133,8 @@ invalid context starts a new trace instead of being echoed or exported. -/
 def Tracer.start (tracer : Tracer) (name : String) (parent : Option String := none)
     (kind : SpanKind := .internal) (attributes : Array Attribute := #[])
     (localRoot : Bool := false) : IO SpanHandle := do
+  let name := boundedText name 256
+  let attributes := sanitize tracer.config attributes
   let parentContext := parent.bind parseTraceparent
   let traceId ← match parentContext with
     | some parent => pure parent.traceId
@@ -155,9 +157,9 @@ def Tracer.start (tracer : Tracer) (name : String) (parent : Option String := no
       if !accepted then return
       let elapsed := (← IO.monoNanosNow) - startedMono
       let span : Span := {
-        context, parentSpanId := if localRoot then none else parentContext.map (·.parentId), name := (name.take 256).toString, kind,
+        context, parentSpanId := if localRoot then none else parentContext.map (·.parentId), name, kind,
         startTimeUnixNano := startTime, endTimeUnixNano := startTime + elapsed,
-        attributes := sanitize tracer.config (attributes ++ finalAttributes), status, errorType := (errorType.take 128).toString }
+        attributes := sanitize tracer.config (attributes ++ finalAttributes.extract 0 tracer.config.maxAttributes), status, errorType := boundedText errorType 128 }
       let bytes := spanBytes span
       tracer.state.modify fun state =>
         if state.pending.size < tracer.config.maxPending && bytes <= tracer.config.maxBytes - min state.pendingBytes tracer.config.maxBytes then
@@ -218,6 +220,7 @@ def Span.toOtlp (span : Span) : Lean.Json :=
     ("traceId", Lean.toJson (Security.Crypto.hex span.context.traceId)),
     ("spanId", Lean.toJson (Security.Crypto.hex span.context.parentId)),
     ("name", Lean.toJson span.name), ("kind", Lean.toJson span.kind.code),
+    ("flags", Lean.toJson span.context.flags.toNat),
     ("startTimeUnixNano", Lean.toJson (toString span.startTimeUnixNano)),
     ("endTimeUnixNano", Lean.toJson (toString span.endTimeUnixNano)),
     ("attributes", .arr (span.attributes.map Attribute.toOtlp)),

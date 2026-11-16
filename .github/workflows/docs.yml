@@ -25,7 +25,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Install native documentation build dependencies
-        run: sudo apt-get update && sudo apt-get install -y libgmp-dev libuv1-dev libssl-dev libpq-dev zlib1g-dev libbrotli-dev pkg-config
+        run: sudo apt-get update && sudo apt-get install -y libgmp-dev libuv1-dev libssl-dev libpq-dev libcurl4-openssl-dev zlib1g-dev libbrotli-dev pkg-config
       - uses: leanprover/lean-action@v1
         with:
           auto-config: false
@@ -49,6 +49,19 @@ jobs:
           test -s docs/.lake/build/doc/LeanWeaveRedis/Client.html
           test -s docs/.lake/build/doc/LeanWeaveRedis/Cache.html
           test -s docs/.lake/build/doc/LeanWeaveTLS.html
+          test -s docs/.lake/build/doc/LeanWeave/Realtime/PubSub.html
+          test -s docs/.lake/build/doc/LeanWeave/Presence.html
+          test -s docs/.lake/build/doc/LeanWeave/Jobs/Worker.html
+          test -s docs/.lake/build/doc/LeanWeave/Workflow/Local.html
+          test -s docs/.lake/build/doc/LeanWeave/Tenant/Sql.html
+          test -s docs/.lake/build/doc/LeanWeave/Security/Journal.html
+          test -s docs/.lake/build/doc/LeanWeave/Security/Policy.html
+          test -s docs/.lake/build/doc/LeanWeave/Observability/Trace.html
+          test -s docs/.lake/build/doc/LeanWeave/Plugin/Manager.html
+          test -s docs/.lake/build/doc/LeanWeave/Grpc/Service.html
+          test -s docs/.lake/build/doc/LeanWeavePostgres/Workflows.html
+          test -s docs/.lake/build/doc/LeanWeaveHttp/Vault.html
+          test -s docs/.lake/build/doc/LeanWeavePlugins.html
           python3 docs/prepare_site.py
           touch docs/.lake/build/doc/.nojekyll
       - name: Upload Pages artifact

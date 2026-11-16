@@ -18,7 +18,7 @@ private def values (headers : Array LeanNet.HTTP1.Header) (name : String) : Stri
   String.intercalate "," ((headers.filter (fun h => h.name.toLower == name)).toList.map fun h => (String.fromUTF8? h.value).getD "no-store")
 
 def eligibleRequest (ctx : Context) : Bool :=
-  (ctx.request.method == "GET" || ctx.request.method == "HEAD") && ctx.attribute "tenant.cache.enabled" != some "false" && !ctx.authenticated &&
+  (ctx.request.method == "GET" || ctx.request.method == "HEAD") && ctx.attribute "tenant.cache.enabled" != some "false" && (ctx.attribute "csp.nonce").isNone && !ctx.authenticated &&
   ctx.sessionId.isNone && ctx.request.clientCertificate.isNone && !(ctx.request.headers.any (fun h => ["authorization", "cookie"].contains h.name.toLower)) &&
   !(directive (values ctx.request.headers "cache-control") "no-cache") &&
   !(directive (values ctx.request.headers "cache-control") "no-store")
@@ -26,7 +26,9 @@ def eligibleRequest (ctx : Context) : Bool :=
 def eligibleResponse (policy : Policy) (response : Response) : Bool :=
   let cc := values response.headers "cache-control"
   let vary := tokens (values response.headers "vary")
-  response.stream.isNone && response.status == 200 && directive cc "public" && !directive cc "private" &&
+  let noncePolicy := ["content-security-policy", "content-security-policy-report-only"].any fun name =>
+    ((values response.headers name).toLower.splitOn "nonce-").length > 1
+  !noncePolicy && response.stream.isNone && response.status == 200 && directive cc "public" && !directive cc "private" &&
     !directive cc "no-store" && !directive cc "no-cache" &&
     !(response.headers.any (fun h => h.name.toLower == "set-cookie")) && !vary.contains "*" &&
     vary.all (fun name => name.isEmpty || policy.vary.any (·.toLower == name))
@@ -38,7 +40,8 @@ private def rawHeaderKey (ctx : Context) (name : String) : String :=
 def responseKey (ctx : Context) (policy : Policy) : String :=
   key (#["response", policy.version, ctx.host, ctx.tenant, ctx.routeName,
     key ctx.path, key (ctx.query.map fun (k,v) => key #[k,v]), ctx.locale,
-    (ctx.attribute "tenant.config.revision").getD "", (ctx.attribute "feature.variant").getD ""] ++
+    (ctx.attribute "tenant.config.revision").getD "", (ctx.attribute "tenant.config.variant").getD "",
+    (ctx.attribute "feature.variant").getD ""] ++
     policy.vary.map (fun name => key #[name.toLower, rawHeaderKey ctx name]))
 
 /-- Dynamic tenant settings can tighten a route's TTL; the tenant revision and
@@ -123,9 +126,10 @@ def middleware (store : Store) (policy : Policy := {}) : Middleware := fun next 
   let cacheKey := responseKey ctx policy
   if let some bytes ← store.get cacheKey (← IO.monoMsNow) then
     if let some (response, insertedAt) := decodeResponse bytes then
-      let age := ((response.getHeader "age").bind String.toNat?).getD 0
-      let response := response.withHeader "age" (toString (age + ((← IO.monoMsNow) - insertedAt) / 1000))
-      return conditional ctx response
+      if eligibleResponse policy response then
+        let age := ((response.getHeader "age").bind String.toNat?).getD 0
+        let response := response.withHeader "age" (toString (age + ((← IO.monoMsNow) - insertedAt) / 1000))
+        return conditional ctx response
   -- A HEAD miss must not populate a GET cache using a HEAD-specific handler.
   if ctx.request.method == "HEAD" then return conditional ctx (← next ctx)
   unless ← store.acquire cacheKey do

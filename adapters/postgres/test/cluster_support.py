@@ -32,9 +32,9 @@ class Cluster:
 @contextmanager
 def cluster(binary_dir=None, tls=False):
     if binary_dir is None:
-        binary_dir = subprocess.check_output(["pg_config", "--bindir"], text=True).strip()
+        binary_dir = os.environ.get("WEAVE_PG_BIN") or subprocess.check_output(["pg_config", "--bindir"], text=True).strip()
     binary_dir = Path(binary_dir)
-    if not (binary_dir / "postgres").is_file():
+    if not (binary_dir / ("postgres.exe" if os.name == "nt" else "postgres")).is_file():
         raise RuntimeError("PostgreSQL server binaries are required for real-database tests")
     with tempfile.TemporaryDirectory(prefix="weave-platform-pg-") as temporary:
         directory = Path(temporary)

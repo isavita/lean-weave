@@ -60,6 +60,30 @@ LEAN_EXPORT lean_obj_res weave_http_init(lean_obj_arg world) {
     if(global_result!=CURLE_OK) return failure("HTTP global initialization failed");
     return lean_io_result_mk_ok(lean_box(0));
 }
+/* Strict worker-safe trust is deliberately restricted to OpenSSL-compatible
+ * backends. Other backends may accept CAINFO_BLOB yet still consult native
+ * stores or perform revocation I/O; those require explicit systemTrust instead.
+ * In MultiSSL builds, inactive backend names are parenthesized. */
+static int supports_ca_blob(void) {
+    const curl_version_info_data *version=curl_version_info(CURLVERSION_NOW);
+    if(!version || version->version_num<0x074d00 || !version->ssl_version) return 0;
+    const char *active=version->ssl_version;
+    for(;;) {
+        while(*active==' ' || *active=='\t') active++;
+        if(*active!='(') break;
+        const char *end=strchr(active,')');
+        if(!end) return 0;
+        active=end+1;
+    }
+    return strncmp(active,"OpenSSL/",8)==0 || strncmp(active,"LibreSSL/",9)==0 ||
+        strncmp(active,"BoringSSL",9)==0 || strncmp(active,"AWS-LC/",7)==0;
+}
+LEAN_EXPORT lean_obj_res weave_http_validate_ca_blob(lean_obj_arg world) {
+    (void)world;ensure_init();
+    if(global_result!=CURLE_OK || !supports_ca_blob())
+        return failure("strict HTTP CA blobs require an OpenSSL-compatible libcurl backend");
+    return lean_io_result_mk_ok(lean_box(0));
+}
 static size_t append(char *data,size_t size,size_t count,void *argument) {
     buffer *b=argument;
     if(size && count>SIZE_MAX/size) return 0;
@@ -76,16 +100,24 @@ static const char *option(b_lean_obj_arg options,size_t index) {
 }
 #define SETOPT(name,value) do { if(curl_easy_setopt(t->easy,name,value)!=CURLE_OK) goto setup_failed; } while(0)
 LEAN_EXPORT lean_obj_res weave_http_start(b_lean_obj_arg options,b_lean_obj_arg headers,
-        b_lean_obj_arg body,size_t timeout,size_t max_body,size_t max_headers,lean_obj_arg world) {
+        b_lean_obj_arg body,b_lean_obj_arg ca_blob,size_t timeout,size_t max_body,size_t max_headers,lean_obj_arg world) {
     (void)world;ensure_init();
     if(global_result!=CURLE_OK || lean_array_size(options)!=5 || !timeout || !max_body || !max_headers)
         return failure("invalid HTTP client configuration");
+    int secure=strncmp(option(options,0),"https://",8)==0;
+    int blob_mode=strcmp(option(options,3),"blob")==0;
+    int system_trust=strcmp(option(options,3),"system")==0;
+    if((secure && !blob_mode && !system_trust) ||
+            (blob_mode && (!secure || !lean_sarray_size(ca_blob) ||
+                lean_sarray_size(ca_blob)>4*1024*1024 || !supports_ca_blob())) ||
+            (!blob_mode && lean_sarray_size(ca_blob)))
+        return failure("invalid or unsupported HTTP trust configuration");
     transfer *t=calloc(1,sizeof(*t));
     if(!t) return failure("HTTP transfer allocation failed");
     t->owner=current_thread();t->body.limit=max_body;t->response_headers.limit=max_headers;
     t->easy=curl_easy_init();t->multi=curl_multi_init();
     if(!t->easy || !t->multi) goto setup_failed;
-    /* URL, METHOD, exact HOST:PORT:numeric ADDRESS, CA bundle, HTTP version. */
+    /* URL, METHOD, exact HOST:PORT:numeric ADDRESS, trust mode, HTTP version. */
     SETOPT(CURLOPT_URL,option(options,0));SETOPT(CURLOPT_CUSTOMREQUEST,option(options,1));
     t->resolve=curl_slist_append(NULL,option(options,2));
     if(!t->resolve) goto setup_failed;
@@ -97,7 +129,17 @@ LEAN_EXPORT lean_obj_res weave_http_start(b_lean_obj_arg options,b_lean_obj_arg 
     SETOPT(CURLOPT_CONNECTTIMEOUT_MS,(long)timeout);
     SETOPT(CURLOPT_SSL_VERIFYPEER,1L);SETOPT(CURLOPT_SSL_VERIFYHOST,2L);
     SETOPT(CURLOPT_SSLVERSION,(long)CURL_SSLVERSION_TLSv1_2);
-    if(option(options,3)[0]) SETOPT(CURLOPT_CAINFO,option(options,3));
+    if(blob_mode) {
+        struct curl_blob blob;
+        blob.data=(void *)(uintptr_t)(const void *)lean_sarray_cptr(ca_blob);
+        blob.len=lean_sarray_size(ca_blob);blob.flags=CURL_BLOB_COPY;
+        /* No fallback to build-time files/directories or native CA providers.
+         * libcurl owns a bounded copy; borrowed Lean bytes end at this call. */
+        SETOPT(CURLOPT_CAINFO,(char *)NULL);
+        SETOPT(CURLOPT_CAPATH,(char *)NULL);
+        SETOPT(CURLOPT_SSL_OPTIONS,0L);
+        SETOPT(CURLOPT_CAINFO_BLOB,&blob);
+    }
     SETOPT(CURLOPT_HTTP_VERSION,(long)(strcmp(option(options,4),"2")==0?CURL_HTTP_VERSION_2TLS:CURL_HTTP_VERSION_1_1));
     SETOPT(CURLOPT_WRITEFUNCTION,append);SETOPT(CURLOPT_WRITEDATA,&t->body);
     SETOPT(CURLOPT_HEADERFUNCTION,append);SETOPT(CURLOPT_HEADERDATA,&t->response_headers);

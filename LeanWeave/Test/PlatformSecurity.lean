@@ -1,6 +1,7 @@
 import LeanWeave.Security.Crypto
 import LeanWeave.Security.Jwt
 import LeanWeave.Security.Csp
+import LeanWeave.Security.Policy
 import LeanWeave.Tenant.Jwt
 import LeanWeave.Tenant.Config
 import LeanWeave.Tenant.Brand
@@ -54,6 +55,14 @@ def run : IO Unit := do
   let duplicateToken := signed ++ "." ++ Security.Crypto.base64url (Security.Crypto.hmac256 key signed.toUTF8)
   check (!(Security.Jwt.verify key jwtPolicy duplicateToken 1500).isOk) "escaped duplicate claims rejected before JSON normalization"
   let ctx ← baseContext
+  let access : Security.Authorization.Policy := auth_policy! all [authenticated, any [role "admin", permission "report.read"], tenant "alpha"]
+  let authorized := { ctx with tenant := "alpha", authenticated := true, attributes := #[("role", "admin")] }
+  check (access.allows authorized) "compiled authorization grants matching trusted claims"
+  check (!(access.allows { authorized with authenticated := false })) "role condition requires authenticated identity"
+  check (!(access.allows { authorized with tenant := "beta" })) "policy tenant boundary"
+  check (access.allows { authorized with attributes := #[("permission.report.read", "true")] }) "compiled permission alternative"
+  let denied ← ((access.middleware fun _ => pure (Response.text "ok")) { authorized with tenant := "beta" }).run
+  check (match denied with | .error e => e.status == 403 | _ => false) "compiled policy gates handler"
   let alpha ← tenant "alpha"
   let beta ← tenant "beta"
   let resolution ← require (← ((Tenant.fromVerifiedJwt (fun _ => pure verified)) ctx).run)

@@ -2,7 +2,7 @@ import Lake
 open Lake DSL
 
 package «lean-weave-plugins» where
-  version := v!"0.1.0"
+  version := v!"0.2.0"
   moreLinkArgs := if System.Platform.isWindows || System.Platform.isOSX then #[] else #["-ldl"]
 
 require «lean-weave» from "../.."

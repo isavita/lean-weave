@@ -5,8 +5,10 @@ import LeanWeave.Observability.Jobs
 import LeanWeave.Secrets.Manager
 import LeanWeave.Security.Audit
 import LeanWeave.Security.Journal
+import LeanWeave.Security.Csp
 import LeanWeave.Observability.File
 import LeanWeave.Feature.Basic
+import LeanWeave.Tenant.ConfigTest
 import LeanWeave.Cache.Response
 import LeanWeave.Test.Client
 
@@ -34,6 +36,7 @@ private def tracing : IO Unit := do
   let some span := spans[0]? | throw (IO.userError "missing span")
   check (Security.Crypto.hex span.context.traceId == "4bf92f3577b34da6a3ce929d0e0e4736") "trace propagation"
   check (span.attributes.any (fun a => a.key == "password" && a.value == .text "[REDACTED]")) "trace redaction"
+  check ((span.toOtlp.getObjValAs? Nat "flags").toOption == some 1) "OTLP sampled flag propagation"
   check (span.endTimeUnixNano >= span.startTimeUnixNano) "trace monotonic duration"
   check (boundedText "ab😀cd" 4 == "ab") "UTF8 byte truncation"
   let absent ← tracer.start "not-sampled"
@@ -89,6 +92,30 @@ private def cacheIsolation : IO Unit := do
   check ((← run zero) == "7") "zero TTL bypasses an existing cache entry"
   let role : Feature.Flag := { name := "admin", enabled := true, requiredRole := some "admin" }
   check (!(Feature.evaluate role { ctx with attributes := #[("tenant.flag.admin", "true")] }).enabled) "tenant flag override cannot bypass audience"
+
+private def cspCacheIsolation : IO Unit := do
+  let ctx ← require LeanWeave.Test.context
+  let policy ← require (Security.Csp.Policy.parse "default-src 'self'; script-src 'nonce'; object-src 'none'; base-uri 'self'")
+  let origin : Handler := fun ctx => pure ((Response.text ((Security.Csp.nonce ctx).getD "missing")).withHeader "cache-control" "public, max-age=60")
+  for outside in [true,false] do
+    let store ← Cache.Store.new
+    let handler := if outside then Cache.middleware store {} (Security.Csp.middleware policy origin)
+      else Security.Csp.middleware policy (Cache.middleware store {} origin)
+    let first ← require (← (handler ctx).run)
+    let second ← require (← (handler ctx).run)
+    check (first.body != second.body) "CSP/cache middleware order cannot reuse a nonce"
+    let nonce := String.fromUTF8! second.body
+    check ((((second.getHeader "content-security-policy").getD "").splitOn ("'nonce-" ++ nonce ++ "'")).length == 2) "cached body/header nonce mismatch"
+    check ((← store.state.get).entries.isEmpty) "nonce-bearing response was stored"
+  let store ← Cache.Store.new
+  let fragment : Handler := fun ctx => do
+    let bytes ← Cache.requestFragment store ctx "nonce" (pure ((Security.Csp.nonce ctx).getD "missing").toUTF8)
+    return Response.text (String.fromUTF8! bytes)
+  let handler := Security.Csp.middleware policy fragment
+  let first ← require (← (handler ctx).run)
+  let second ← require (← (handler ctx).run)
+  check (first.body != second.body && (← store.state.get).entries.isEmpty) "nonce-sensitive request fragments bypass caching"
+  check (!(Cache.eligibleResponse {} ((Response.text "x").withHeader "cache-control" "public" |>.withHeader "content-security-policy-report-only" "script-src 'nonce-abc'"))) "report-only nonce responses bypass storage"
 
 private def logging : IO Unit := do
   let logger ← Observability.Logger.create { sampleBasisPoints := 0 }
@@ -235,9 +262,11 @@ private def journal : IO Unit := do
     check (((Lean.Json.parse logs).bind fun json => json.getObjValAs? String "event").toOption == some "native.file.test") "structured JSON persisted"
 
 def run : IO Unit := do
+  LeanWeave.Tenant.ConfigTest.run
   tracing
   logging
   cacheIsolation
+  cspCacheIsolation
   healthDrain
   secrets
   audit

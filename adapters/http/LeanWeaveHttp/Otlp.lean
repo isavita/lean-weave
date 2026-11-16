@@ -1,4 +1,5 @@
 import LeanWeaveHttp.Client
+import LeanWeave.Core.Body
 import LeanWeave.Observability.Export
 
 namespace LeanWeave.Http
@@ -12,12 +13,15 @@ def otlpTransport (client : Client) (path : String := "/v1/traces")
     headers := headers.push ("content-type", "application/json") }
   if result.status == 200 then
     if result.body.isEmpty then return { accepted := true }
-    let .ok json := Lean.Json.parse (String.fromUTF8! result.body) |
+    let .ok json := Body.json result.body { maxBytes := client.config.maxResponseBytes, maxDepth := 8, maxFields := 16 } |
       return { accepted := false, retryable := false }
     let rejected := ((json.getObjVal? "partialSuccess").bind fun result => result.getObjVal? "rejectedSpans").toOption
-    let rejected := rejected.map (fun value => match value.getStr? with
-      | .ok text => text.toNat?.getD 0
-      | .error _ => (Lean.fromJson? value : Except String Nat).toOption.getD 0) |>.getD 0
+    let rejected : Option Nat := match rejected with
+      | none => some 0
+      | some value => match value.getStr? with
+        | .ok text => text.toNat?
+        | .error _ => (Lean.fromJson? value : Except String Nat).toOption
+    let some rejected := rejected | return { accepted := false, retryable := false }
     return { accepted := true, rejected }
   return { accepted := false, retryable := [408,429,502,503,504].contains result.status }
 

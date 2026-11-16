@@ -55,7 +55,8 @@ private def wrapTarget (row : Row) : CommandElabM Term := do
     | .capture _ .nat => some (mkIdent ``Nat)
     | .capture _ .int => some (mkIdent ``Int)
     | .capture _ .text | .rest _ => some (mkIdent ``String)
-  let arguments := captures.mapIdx fun index _ => mkIdent (Name.mkSimple s!"__weave_api_capture_{index}")
+  let arguments ← captures.mapIdxM fun index _ =>
+    return mkIdent (← liftCoreM (mkFreshUserName (Name.mkSimple s!"__weave_api_capture_{index}")))
   let target ← `($(row.target) $arguments*)
   let mut wrapped ← match row.input with
     | none => `(Schema.outputHandler $(row.output) $target $(quote row.code))
@@ -80,6 +81,17 @@ private def wrapTarget (row : Row) : CommandElabM Term := do
       | some input => `(some (Schema.definition $input))
     operations := operations.push (← `(({ name := $(quote row.name.getId.toString), request := $request, response := Schema.definition $(row.output), «status» := $(quote row.code) } : Operation)))
   elabCommand (← `(weave_routes $routerName where { $routes:weave_route,* }))
-  elabCommand (← `(def $name : Api := { router := $routerName, operations := #[$operations,*] }))
+  -- The route definition can capture caller section parameters. Apply its
+  -- parameters in this same scope, preserving their original caller identity.
+  let declaration ← getConstInfo (← resolveGlobalConstNoOverload routerName)
+  let mut type := declaration.type
+  let mut parameters : Array Term := #[]
+  while let .forallE parameter _ body info := type do
+    let argument ← if info == .instImplicit then `(by infer_instance)
+      else pure (mkIdent parameter : Term)
+    parameters := parameters.push argument
+    type := body
+  let applied ← `(@$routerName $parameters*)
+  elabCommand (← `(def $name : Api := { router := $applied, operations := #[$operations,*] }))
 
 end LeanWeave.OpenApi

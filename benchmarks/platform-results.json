@@ -1,0 +1,66 @@
+{
+  "utc": "2026-11-16T15:04:57.670560+00:00",
+  "platform": "macOS-27.2.1-arm64-arm-64bit-Mach-O",
+  "machine": "arm64",
+  "processor": "arm",
+  "lean": "Lean (version 4.35.0, arm64-apple-darwin24.6.0, commit eb6cafb7290e8bd5f2937522d8d804f58f02bafc, Release)",
+  "commit": "31affc8ae20a2901beb73c5b31ef3ec931ec112a",
+  "dirty": true,
+  "measurement": "Native wall time and IO.getNumHeartbeats thread-local small allocation deltas; excludes large byte buffers, native malloc, RSS, sockets and TLS. Counts include loop and IO scaffolding.",
+  "samples": [
+    {
+      "checksum": 25000,
+      "iterations": 5000,
+      "name": "tenant_subdomain_resolution",
+      "nanoseconds": 3801000,
+      "small_allocations": 70002,
+      "ns_per_iteration": 760.2,
+      "small_allocations_per_iteration": 14.0004
+    },
+    {
+      "checksum": 25032450,
+      "iterations": 5000,
+      "name": "feature_sticky_cohort",
+      "nanoseconds": 15996250,
+      "small_allocations": 82552,
+      "ns_per_iteration": 3199.25,
+      "small_allocations_per_iteration": 16.5104
+    },
+    {
+      "checksum": 5000,
+      "iterations": 5000,
+      "name": "sampled_span_start_finish_take",
+      "nanoseconds": 98997416,
+      "small_allocations": 112466,
+      "ns_per_iteration": 19799.4832,
+      "small_allocations_per_iteration": 22.4932
+    },
+    {
+      "checksum": 993890,
+      "iterations": 5000,
+      "name": "structured_log_enqueue_take",
+      "nanoseconds": 33326917,
+      "small_allocations": 500002,
+      "ns_per_iteration": 6665.3834,
+      "small_allocations_per_iteration": 100.0004
+    },
+    {
+      "checksum": 1622786,
+      "iterations": 5000,
+      "name": "audit_hash_chain_append",
+      "nanoseconds": 77123667,
+      "small_allocations": 1545002,
+      "ns_per_iteration": 15424.7334,
+      "small_allocations_per_iteration": 309.0004
+    },
+    {
+      "checksum": 5000,
+      "iterations": 5000,
+      "name": "local_pubsub_fanout_poll",
+      "nanoseconds": 4421709,
+      "small_allocations": 180002,
+      "ns_per_iteration": 884.3418,
+      "small_allocations_per_iteration": 36.0004
+    }
+  ]
+}

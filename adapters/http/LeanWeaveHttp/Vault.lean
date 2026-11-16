@@ -1,4 +1,5 @@
 import LeanWeaveHttp.Client
+import LeanWeave.Core.Body
 import LeanWeave.Secrets.Manager
 
 namespace LeanWeave.Http.Vault
@@ -44,7 +45,7 @@ def backend (client : Client) (token : IO Secrets.Secret) (config : Config) : Ex
       headers := #[("x-vault-token", token)] }
     if result.status != 200 then throw { status := 503, message := "Vault secret load failed" }
     let loaded : Except String Secrets.Loaded := do
-      let json ← Lean.Json.parse (String.fromUTF8! result.body)
+      let json ← (Body.json result.body { maxBytes := client.config.maxResponseBytes, maxDepth := 16, maxFields := 64 }).mapError (fun _ => "invalid Vault JSON")
       let data ← json.getObjVal? "data"
       let values ← data.getObjVal? "data"
       let value : String ← values.getObjValAs? _ binding.field

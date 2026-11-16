@@ -1,0 +1,15 @@
+{
+  "passed": true,
+  "valid": 1,
+  "rejected": [
+    "CSP unsafe inline",
+    "CSP unsafe scheme",
+    "CSP duplicate directive",
+    "CSP misplaced nonce",
+    "CSP required boundary",
+    "authorization empty group",
+    "authorization empty role",
+    "authorization invalid tenant",
+    "forged JWT claims"
+  ]
+}

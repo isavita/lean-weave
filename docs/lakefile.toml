@@ -1,6 +1,6 @@
 name = "lean-weave-docs"
 reservoir = false
-version = "0.1.0"
+version = "0.2.0"
 defaultTargets = ["LeanWeaveDocs"]
 
 [[lean_lib]]
@@ -32,4 +32,12 @@ path = "../adapters/tls"
 [[require]]
 name = "lean-net"
 git = "https://github.com/isavita/lean-net.git"
-rev = "c66fd080b7c748a01cfa72868b05023d5a6c8045"
+rev = "db114456cf8ad27efb68d967e296e1d2b5efaaf9"
+
+[[require]]
+name = "lean-weave-http"
+path = "../adapters/http"
+
+[[require]]
+name = "lean-weave-plugins"
+path = "../adapters/plugins"

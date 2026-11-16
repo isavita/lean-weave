@@ -12,6 +12,7 @@ suffix='.exe' if os.name=='nt' else ''
 run(['lake','build','weave-platform-test','weave-crypto-fixture'])
 run([root/('.lake/build/bin/weave-platform-test'+suffix)])
 run([sys.executable,'test/platform/crypto.py'])
+run([sys.executable,'scripts/test_platform_compile.py'])
 if a.postgres:
  run(['lake','build','weave-pg-tenant-test'],root/'adapters/postgres')
  run([sys.executable,'adapters/postgres/test/tenant_compile.py'])

@@ -58,6 +58,7 @@ def Health.middleware (health : Health) : Middleware := fun next ctx => do
   let ok := probe == "live" || snapshot.any (fun s => if probe == "startup" then s.initialized else s.ready)
   let response := (Response.json (Lean.Json.mkObj [("probe", Lean.toJson probe), ("ok", Lean.toJson ok)])
     (if ok then 200 else 503)).withHeader "cache-control" "no-store"
-  return if ctx.request.method == "HEAD" then { response with body := ByteArray.empty } else response
+  -- Native framing suppresses HEAD bytes while retaining GET Content-Length.
+  return response
 
 end LeanWeave.Operations

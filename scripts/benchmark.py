@@ -12,9 +12,11 @@ root = Path(__file__).resolve().parents[1]
 p = argparse.ArgumentParser()
 p.add_argument("--iterations", type=int, default=20000)
 p.add_argument("--output", type=Path, default=root / "benchmarks/results.json")
+p.add_argument("--platform", action="store_true", help="sample advanced application platform primitives")
 a = p.parse_args()
-subprocess.run(["lake", "build", "weave-bench"], cwd=root, check=True)
-binary = root / (".lake/build/bin/weave-bench" + (".exe" if os.name == "nt" else ""))
+target = "weave-platform-bench" if a.platform else "weave-bench"
+subprocess.run(["lake", "build", target], cwd=root, check=True)
+binary = root / (".lake/build/bin/" + target + (".exe" if os.name == "nt" else ""))
 result = subprocess.run([str(binary), str(a.iterations)], cwd=root, text=True, capture_output=True, check=True)
 report = {
     "utc": datetime.now(timezone.utc).isoformat(),

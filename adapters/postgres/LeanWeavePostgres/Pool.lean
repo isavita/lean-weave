@@ -98,6 +98,10 @@ structure Connection where
   private native : Native.Handle
   private config : Config
   private leased : IO.Ref Bool
+  /-- Physical-slot epoch plus this acquisition's immutable snapshot. An escaped
+      lease cannot become valid when the physical connection is borrowed again. -/
+  private epoch : IO.Ref Nat
+  private leaseEpoch : Nat
   private connected : IO.Ref Bool
   private failed : IO.Ref Bool
   private trace : Option (Observability.Tracer × Option String) := none
@@ -127,17 +131,25 @@ def Pool.create (config : Config := {}) (tracer : Option Observability.Tracer :=
   | .error message => throw (IO.userError message)
   | .ok _ => return { config, connections := ← IO.mkRef #[], waiting := ← IO.mkRef 0, closed := ← IO.mkRef false, tracer }
 
-private def Connection.close (connection : Connection) : IO Unit := do
+private def Connection.closePhysical (connection : Connection) : IO Unit := do
   connection.failed.set true
+  connection.leased.set false
   connection.connected.set false
   Native.close connection.native
+
+private def Connection.isCurrent (connection : Connection) : IO Bool := do
+  return (← connection.leased.get) && !(← connection.failed.get) &&
+    (← connection.epoch.get) == connection.leaseEpoch
+
+private def Connection.close (connection : Connection) : IO Unit := do
+  if ← connection.isCurrent then connection.closePhysical
 
 /-- Immediate, idempotent closure cancels leases and releases every database socket. -/
 def Pool.close (pool : Pool) : IO Unit := do
   pool.closed.set true
   let connections ← pool.connections.get
   pool.connections.set #[]
-  for connection in connections do connection.close
+  for connection in connections do connection.closePhysical
 
 private def Pool.tryAcquire (pool : Pool) : IO (Option Connection) := do
   if ← pool.closed.get then throw (IO.userError "PostgreSQL pool is closed")
@@ -145,15 +157,21 @@ private def Pool.tryAcquire (pool : Pool) : IO (Option Connection) := do
   let mut available : Option Connection := none
   for connection in ← pool.connections.get do
     unless ← connection.failed.get do
-      live := live.push connection
       if available.isNone && !(← connection.leased.get) then
-        connection.leased.set true
-        available := some connection
+        let previous ← connection.epoch.get
+        if previous >= 9223372036854775807 then connection.closePhysical
+        else
+          let epoch := previous + 1
+          connection.epoch.set epoch
+          connection.leased.set true
+          available := some { connection with leaseEpoch := epoch }
+      unless ← connection.failed.get do live := live.push connection
   pool.connections.set live
   if available.isSome then return available
   if live.size >= pool.config.maxConnections then return none
   let native ← Native.start pool.config.options
-  let connection := Connection.mk native pool.config (← IO.mkRef true) (← IO.mkRef false) (← IO.mkRef false) none
+  let connection := Connection.mk native pool.config (← IO.mkRef true) (← IO.mkRef 1) 1
+    (← IO.mkRef false) (← IO.mkRef false) none
   pool.connections.set (live.push connection)
   return some connection
 
@@ -177,10 +195,14 @@ private def Pool.acquire (pool : Pool) : AppM Connection := do
     (fun _ => release) pool.config.connectTimeoutMs 128) release
 
 private def Connection.ensureConnected (connection : Connection) : AppM Unit := do
+  unless ← databaseIO connection.isCurrent do
+    throw { status := 503, message := "PostgreSQL lease is no longer active" }
   unless ← databaseIO connection.connected.get do
     AppM.await
       (do
         try
+          unless ← connection.isCurrent do
+            return some (.error { status := 503, message := "PostgreSQL lease is no longer active" })
           if ← Native.connectPoll connection.native then
             connection.connected.set true
             return some (.ok ())
@@ -191,8 +213,9 @@ private def Connection.ensureConnected (connection : Connection) : AppM Unit := 
       (fun _ => connection.close) connection.config.connectTimeoutMs 8192
 
 private def Connection.release (connection : Connection) : IO Unit := do
+  unless ← connection.isCurrent do return
   let healthy ← Native.healthy connection.native
-  unless healthy do connection.close
+  unless healthy do connection.closePhysical
   connection.leased.set false
 
 /-- Run a bounded operation under a lease. Completion, failure, timeout and
@@ -211,7 +234,7 @@ def Pool.withTraceContext (pool : Pool) (context : Context) : Pool :=
     Results use single-row mode and enforce row, column and retained-byte bounds. -/
 def Connection.query (connection : Connection) (sql : String)
     (params : Array (Option String) := #[]) : AppM Result := do
-  unless (← databaseIO connection.leased.get) && !(← databaseIO connection.failed.get) do
+  unless ← databaseIO connection.isCurrent do
     throw { status := 503, message := "PostgreSQL lease is no longer active" }
   if sql.isEmpty || sql.utf8ByteSize > connection.config.maxQueryBytes || sql.toUTF8.toList.contains 0 then
     throw { status := 400, message := "invalid or oversized SQL statement" }
@@ -237,6 +260,8 @@ def Connection.query (connection : Connection) (sql : String)
         connection.config.maxResultBytes.toUSize connection.config.maxColumns.toUSize)
       let result ← AppM.await
         (do
+          unless ← connection.isCurrent do
+            return some (.error { status := 503, message := "PostgreSQL lease is no longer active" })
           try return (← Native.poll connection.native).map Except.ok
           catch error =>
             connection.close

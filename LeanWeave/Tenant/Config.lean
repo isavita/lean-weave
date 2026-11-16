@@ -1,4 +1,5 @@
 import LeanWeave.Tenant.Basic
+import LeanWeave.Security.Audit
 import Std.Sync.Mutex
 
 namespace LeanWeave.Tenant
@@ -13,9 +14,11 @@ structure Config where
   brandName : String := "LeanWeave"
   brandColor : String := "#334155"
   revision : Nat := 1
-  deriving Repr, BEq
+  deriving Repr, BEq, Lean.ToJson
 
 def Config.validate (config : Config) : Except String Unit := do
+  if config.revision > 9223372036854775807 then throw "tenant revision exceeds UInt63"
+  if (Lean.toJson config).compress.utf8ByteSize > 4096 then throw "tenant configuration snapshot byte limit exceeded"
   if config.flags.size > 128 || config.flags.any (fun p => p.1.isEmpty || p.1.utf8ByteSize > 128) then throw "invalid tenant feature overrides"
   if config.flags.size != (config.flags.toList.map Prod.fst).eraseDups.length then throw "duplicate tenant feature override"
   if config.requestsPerSecond == 0 || config.burst == 0 || config.requestsPerSecond > 1000000 || config.burst > 1000000 then
@@ -29,40 +32,115 @@ def Config.validate (config : Config) : Except String Unit := do
 structure Entry where
   tenant : Id
   config : Config
+  fingerprint : String
+
+private structure State where
+  entries : Array Entry := #[]
+  records : Array Security.Audit.Record := #[]
+  checkpoint : Security.Audit.Checkpoint := {}
+  auditBytes : Nat := 0
+  revisionWatermark : Nat := 0
 
 /-- Shared configuration snapshots are replaced atomically; request callbacks use try-locks. -/
 structure Store where
-  private state : Std.Mutex (Array Entry)
+  private state : Std.Mutex State
   capacity : Nat
+  auditCapacity : Nat
+  auditMaxBytes : Nat
 
-def Store.new (capacity : Nat := 1024) : IO Store := do
-  if capacity == 0 || capacity > 100000 then throw (IO.userError "invalid tenant configuration capacity")
-  return { state := ← Std.Mutex.new #[], capacity }
+def Store.new (capacity : Nat := 1024) (auditCapacity : Nat := 4096)
+    (auditMaxBytes : Nat := 16 * 1024 * 1024) : IO Store := do
+  if capacity == 0 || capacity > 100000 || auditCapacity == 0 || auditCapacity > 65536 ||
+      auditMaxBytes == 0 || auditMaxBytes > 1024 * 1024 * 1024 then
+    throw (IO.userError "invalid tenant configuration/audit capacity")
+  return { state := ← Std.Mutex.new {}, capacity, auditCapacity, auditMaxBytes }
 
-def Store.get (store : Store) (id : Id) : IO (Except AppError (Option Config)) := do
+private def Store.getEntry (store : Store) (id : Id) : IO (Except AppError (Option Entry)) := do
   let result ← store.state.tryAtomically do
-    let entries ← getThe (Array Entry)
-    return (entries.find? (fun e => e.tenant == id)).map (·.config)
+    let state ← getThe State
+    return state.entries.find? (fun e => e.tenant == id)
   return match result with
     | some value => .ok value
     | none => .error { status := 503, message := "tenant configuration busy" }
 
-/-- A config reload increments its generation even when a caller reuses an old revision. -/
-def Store.set (store : Store) (id : Id) (config : Config) : IO (Except AppError Unit) := do
+def Store.get (store : Store) (id : Id) : IO (Except AppError (Option Config)) := do
+  return (← store.getEntry id).map (Option.map (·.config))
+
+/-- Commit a bounded snapshot and audit record together. The shared revision
+watermark survives removals and acknowledgement, preventing generation reuse. -/
+def Store.set (store : Store) (id : Id) (config : Config) (actor : String := "system") : IO (Except AppError Unit) := do
   if let .error _ := config.validate then return .error { status := 400, message := "invalid tenant configuration" }
+  let timeUnixNano := (← Std.Time.Timestamp.now).toNanosecondsSinceUnixEpoch.val.toNat
   let result ← store.state.tryAtomically do
-    let entries ← getThe (Array Entry)
+    let state ← getThe State
+    let entries := state.entries
+    if state.records.size >= store.auditCapacity then return .error { status := 503, message := "tenant audit ledger full" }
     let old := entries.find? (fun e => e.tenant == id)
     if old.isNone && entries.size >= store.capacity then
       return .error { status := 503, message := "tenant configuration capacity reached" }
-    let revision := max config.revision ((old.map (·.config.revision)).getD 0 + 1)
-    MonadStateOf.set ((entries.filter (fun e => e.tenant != id)).push { tenant := id, config := { config with revision } })
-    return .ok ()
+    if state.revisionWatermark >= 9223372036854775807 then
+      return .error { status := 503, message := "tenant revision generation exhausted" }
+    let revision := max config.revision (state.revisionWatermark + 1)
+    let config := { config with revision }
+    if let .error _ := config.validate then return .error { status := 400, message := "tenant configuration snapshot too large" }
+    let event : Security.Audit.Event := {
+      action := "tenant.config.set", actor, tenant := id.value, target := id.value, timeUnixNano
+      changes := #[("before", (Lean.toJson (old.map (·.config))).compress), ("after", (Lean.toJson config).compress)] }
+    match Security.Audit.append state.checkpoint event with
+    | .error _ => return .error { status := 400, message := "tenant audit metadata invalid" }
+    | .ok record =>
+      let bytes := record.line.utf8ByteSize
+      if bytes > store.auditMaxBytes - state.auditBytes then return .error { status := 503, message := "tenant audit byte budget exhausted" }
+      MonadStateOf.set { state with
+        entries := (entries.filter (fun (e : Entry) => e.tenant != id)).push {
+          tenant := id, config, fingerprint := Security.Crypto.hex (Security.Crypto.sha256 (Lean.toJson config).compress.toUTF8) }
+        records := state.records.push record
+        checkpoint := record.checkpoint
+        auditBytes := state.auditBytes + bytes
+        revisionWatermark := revision }
+      return .ok ()
   return result.getD (.error { status := 503, message := "tenant configuration busy" })
 
-def Store.remove (store : Store) (id : Id) : IO (Except AppError Unit) := do
-  let result ← store.state.tryAtomically do modify (fun entries => entries.filter (fun e => e.tenant != id))
-  return if result.isSome then .ok () else .error { status := 503, message := "tenant configuration busy" }
+/-- Removal, including an already-absent ID, records full before/after metadata.
+Audit admission failure leaves both the snapshot and revision watermark intact. -/
+def Store.remove (store : Store) (id : Id) (actor : String := "system") : IO (Except AppError Unit) := do
+  let timeUnixNano := (← Std.Time.Timestamp.now).toNanosecondsSinceUnixEpoch.val.toNat
+  let result ← store.state.tryAtomically do
+    let state ← getThe State
+    if state.records.size >= store.auditCapacity then return .error { status := 503, message := "tenant audit ledger full" }
+    let old := (state.entries.find? (fun e => e.tenant == id)).map (·.config)
+    let event : Security.Audit.Event := {
+      action := "tenant.config.remove", actor, tenant := id.value, target := id.value, timeUnixNano
+      changes := #[("before", (Lean.toJson old).compress), ("after", "null")] }
+    match Security.Audit.append state.checkpoint event with
+    | .error _ => return .error { status := 400, message := "tenant audit metadata invalid" }
+    | .ok record =>
+      let bytes := record.line.utf8ByteSize
+      if bytes > store.auditMaxBytes - state.auditBytes then return .error { status := 503, message := "tenant audit byte budget exhausted" }
+      MonadStateOf.set { state with
+        entries := state.entries.filter (fun e => e.tenant != id)
+        records := state.records.push record
+        checkpoint := record.checkpoint
+        auditBytes := state.auditBytes + bytes }
+      return .ok ()
+  return result.getD (.error { status := 503, message := "tenant configuration busy" })
+
+/-- Immutable pending mutation history; snapshots are bounded before admission. -/
+def Store.audit (store : Store) : IO (Except AppError (Array Security.Audit.Record)) := do
+  let result ← store.state.tryAtomically (do return (← getThe State).records)
+  return match result with | some records => .ok records | none => .error { status := 503, message := "tenant audit busy" }
+
+/-- Release a matching prefix only after external persistence and checkpoint anchoring. -/
+def Store.acknowledgeAudit (store : Store) (checkpoint : Security.Audit.Checkpoint) : IO (Except AppError Unit) := do
+  let result ← store.state.tryAtomically do
+    let state ← getThe State
+    unless state.records.any (fun record => record.checkpoint == checkpoint) do
+      return .error { status := 409, message := "tenant audit checkpoint is not pending" }
+    let records := state.records.filter (fun record => record.sequence > checkpoint.sequence)
+    let bytes := records.foldl (fun (bytes : Nat) (record : Security.Audit.Record) => bytes + record.line.utf8ByteSize) 0
+    MonadStateOf.set { state with records, auditBytes := bytes }
+    return .ok ()
+  return result.getD (.error { status := 503, message := "tenant audit busy" })
 
 private def replace (attributes : Array (String × String)) (name value : String) : Array (String × String) :=
   (attributes.filter (fun p => p.1 != name)).push (name,value)
@@ -70,13 +148,14 @@ private def replace (attributes : Array (String × String)) (name value : String
 /-- Thread a bounded immutable snapshot through Context for feature, cache and UI consumers. -/
 def configured (store : Store) : Middleware := fun next ctx => do
   let tenant ← match Id.fromContext ctx with | .ok id => pure id | .error error => throw error
-  let config ← match ← store.get tenant with
-    | .ok (some config) => pure config
+  let entry ← match ← store.getEntry tenant with
+    | .ok (some entry) => pure entry
     | .ok none => throw { status := 404, message := "tenant configuration missing" }
     | .error error => throw error
+  let config := entry.config
   let mut attributes := ctx.attributes
   for (key,value) in #[
-    ("tenant.config.revision", toString config.revision),
+    ("tenant.config.revision", toString config.revision), ("tenant.config.variant", entry.fingerprint),
     ("tenant.rate.perSecond", toString config.requestsPerSecond), ("tenant.rate.burst", toString config.burst),
     ("tenant.cache.enabled", toString config.cacheEnabled), ("tenant.cache.ttlMs", toString config.cacheTtlMs),
     ("tenant.brand.name", config.brandName), ("tenant.brand.color", config.brandColor)] do

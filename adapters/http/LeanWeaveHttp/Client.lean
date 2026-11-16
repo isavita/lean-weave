@@ -11,7 +11,12 @@ structure Endpoint where
   hostAddr : String
   port : UInt16 := 443
   secure : Bool := true
+  /-- Read once at client startup. When supplied, this bundle takes precedence
+      over systemTrust and request callbacks never reopen its path. -/
   caBundle : String := ""
+  /-- Explicitly permit platform/default trust-store work when no bundle is
+      configured. This can perform OS/file work during a TLS handshake. -/
+  systemTrust : Bool := false
   preferHttp2 : Bool := false
 
 structure Config where
@@ -20,6 +25,7 @@ structure Config where
   maxRequestBytes : Nat := 256 * 1024
   maxResponseBytes : Nat := 256 * 1024
   maxHeaderBytes : Nat := 16384
+  maxCABytes : Nat := 512 * 1024
   timeoutMs : Nat := 5000
 
 private def clean (text : String) : Bool := !text.toUTF8.data.any (fun b => b < 32 || b == 127)
@@ -31,10 +37,13 @@ def Config.validate (config : Config) : Except String Unit := do
         (b >= 48 && b <= 57) || b == 45 || b == 46) || endpoint.port == 0 then throw "invalid HTTP service identity"
   if (Std.Net.IPv4Addr.ofString endpoint.hostAddr).isNone && (Std.Net.IPv6Addr.ofString endpoint.hostAddr).isNone then
     throw "HTTP hostAddr must be a numeric IP address"
+  if endpoint.secure && !endpoint.systemTrust && endpoint.caBundle.isEmpty then
+    throw "secure HTTP requires a startup CA bundle or explicit systemTrust"
   if config.maxActive == 0 || config.maxActive > 1024 || config.maxRequestBytes > 16 * 1024 * 1024 ||
       config.maxResponseBytes == 0 || config.maxResponseBytes > 64 * 1024 * 1024 || config.maxHeaderBytes < 1024 ||
       config.maxHeaderBytes > 1024 * 1024 || config.timeoutMs == 0 || config.timeoutMs > 86400000 ||
-      endpoint.caBundle.utf8ByteSize > 4096 || !clean endpoint.caBundle then throw "invalid HTTP client bounds"
+      endpoint.caBundle.utf8ByteSize > 4096 || !clean endpoint.caBundle ||
+      config.maxCABytes == 0 || config.maxCABytes > 4 * 1024 * 1024 then throw "invalid HTTP client bounds"
 
 structure Request where
   method : String := "GET"
@@ -57,14 +66,34 @@ private structure Active where
 structure Client where
   config : Config
   private tracer : Option Observability.Tracer
+  /-- Shared original bundle. Each active native transfer separately accounts
+      for the CURL_BLOB_COPY bytes in Config.retainedBytes. -/
+  private caBlob : ByteArray
   private active : IO.Ref (Array Active)
   private nextId : IO.Ref Nat
   private closed : IO.Ref Bool
 
+/-- Startup-only construction on the future owner: bounded CA file reads and
+    native TLS capability checks complete before request callbacks use the client. -/
 def Client.create (config : Config) (tracer : Option Observability.Tracer := none) : IO Client := do
   match config.validate with | .error message => throw (IO.userError message) | .ok () => pure ()
   Native.init
-  return { config, tracer, active := ← IO.mkRef #[], nextId := ← IO.mkRef 0, closed := ← IO.mkRef false }
+  let caBlob ← if config.endpoint.secure && !config.endpoint.caBundle.isEmpty then do
+      Native.validateCABlob
+      let bytes ← IO.FS.withFile config.endpoint.caBundle .read fun file => do
+        let mut bytes := ByteArray.empty
+        -- The extra byte distinguishes an exact-sized bundle from overflow;
+        -- short file reads are retried without ever exceeding this allowance.
+        while bytes.size <= config.maxCABytes do
+          let chunk ← file.read (min 65536 (config.maxCABytes + 1 - bytes.size)).toUSize
+          if chunk.isEmpty then break
+          bytes := bytes ++ chunk
+        return bytes
+      if bytes.isEmpty || bytes.size > config.maxCABytes then
+        throw (IO.userError "HTTP CA bundle is empty or exceeds maxCABytes")
+      pure bytes
+    else pure ByteArray.empty
+  return { config, tracer, caBlob, active := ← IO.mkRef #[], nextId := ← IO.mkRef 0, closed := ← IO.mkRef false }
 
 def Client.close (client : Client) : IO Unit := do
   client.closed.set true
@@ -74,7 +103,8 @@ def Client.close (client : Client) : IO Unit := do
 def Client.isIdle (client : Client) : IO Bool := do return (← client.active.get).isEmpty
 
 def Config.retainedBytes (config : Config) : Nat :=
-  2 * config.maxRequestBytes + 2 * config.maxResponseBytes + 2 * config.maxHeaderBytes + 16384
+  2 * config.maxRequestBytes + 2 * config.maxResponseBytes + 2 * config.maxHeaderBytes + 16384 +
+    (if config.endpoint.secure && !config.endpoint.caBundle.isEmpty then config.maxCABytes else 0)
 
 private def io (action : IO α) : AppM α := do
   try return ← action catch _ => throw { status := 503, message := "HTTP client operation failed" }
@@ -130,8 +160,9 @@ def Client.request (client : Client) (request : Request) (context : Option Conte
     let headers : Array (String × String) := match span with
       | some span => (request.headers.filter (fun (p : String × String) => p.1.toLower != "traceparent")).push ("traceparent", Observability.formatTraceparent span.context)
       | none => request.headers
-    let native ← io (Native.start #[url, request.method, resolve, endpoint.caBundle, if endpoint.preferHttp2 then "2" else "1"]
-      (headers.map fun (name,value) => name ++ ": " ++ value) request.body client.config.timeoutMs.toUSize
+    let trust := if !client.caBlob.isEmpty then "blob" else if endpoint.systemTrust then "system" else "plain"
+    let native ← io (Native.start #[url, request.method, resolve, trust, if endpoint.preferHttp2 then "2" else "1"]
+      (headers.map fun (name,value) => name ++ ": " ++ value) request.body client.caBlob client.config.timeoutMs.toUSize
       client.config.maxResponseBytes.toUSize client.config.maxHeaderBytes.toUSize)
     let id ← io client.nextId.get
     io (client.nextId.modify (· + 1))

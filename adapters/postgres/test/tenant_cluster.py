@@ -21,4 +21,7 @@ with cluster(a.pg_bin, tls=True) as pg:
     subprocess.run([str(binary)], env=pg.environment("weave_app"), check=True, timeout=30)
     a.report.write_text(json.dumps({"passed":True,"kind":"real PostgreSQL TLS with non-superuser FORCE RLS",
         "tenant_isolation":True,"pool_scope_reset":True,"parameter_injection_rejected":True,
-        "tenant_override_rejected":True,"actual_migration_helper_executed":True,"persistent_service_started":False}, indent=2)+"\n")
+        "tenant_override_rejected":True,"actual_migration_helper_executed":True,
+        "escaped_connection_reborrow_rejected":True,"escaped_tenant_scope_reborrow_rejected":True,
+        "same_physical_connection_verified":True,"current_lease_preserved":True,
+        "persistent_service_started":False}, indent=2)+"\n")

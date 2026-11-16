@@ -1,11 +1,11 @@
 name = "lean-weave"
-version = "0.1.0"
+version = "0.2.0"
 defaultTargets = ["LeanWeave", "weave", "weave-test"]
 
 [[require]]
 name = "lean-net"
 git = "https://github.com/isavita/lean-net.git"
-rev = "c66fd080b7c748a01cfa72868b05023d5a6c8045"
+rev = "db114456cf8ad27efb68d967e296e1d2b5efaaf9"
 
 [[lean_lib]]
 name = "LeanWeave"
@@ -54,3 +54,39 @@ root = "LeanWeave.Test.WireFixture"
 [[lean_exe]]
 name = "weave-static-fixture"
 root = "LeanWeave.Test.StaticFixture"
+
+[[lean_exe]]
+name = "weave-jobs-test"
+root = "LeanWeave.Jobs.TestMain"
+
+[[lean_exe]]
+name = "weave-platform-test"
+root = "LeanWeave.Test.PlatformMain"
+
+[[lean_exe]]
+name = "weave-protocol-fixture"
+root = "LeanWeave.Test.ProtocolFixture"
+
+[[lean_exe]]
+name = "weave-stream-test"
+root = "LeanWeave.Test.StreamMain"
+
+[[lean_exe]]
+name = "weave-realtime-fixture"
+root = "LeanWeave.Test.RealtimeFixture"
+
+[[lean_exe]]
+name = "weave-crypto-fixture"
+root = "LeanWeave.Test.CryptoFixture"
+
+[[lean_exe]]
+name = "weave-graphql-test"
+root = "LeanWeave.Test.GraphQLMain"
+
+[[lean_exe]]
+name = "weave-graphql-fixture"
+root = "LeanWeave.Test.GraphQLFixture"
+
+[[lean_exe]]
+name = "weave-platform-bench"
+root = "benchmarks.Platform"

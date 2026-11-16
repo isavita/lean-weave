@@ -37,6 +37,35 @@ def main (arguments : List String) : IO Unit := do
       let query ← need (Tenant.Sql.select tenant table #[title])
       let result ← need (← run (Postgres.Tenant.withTenant pool tenant (fun scope => scope.execute query)))
       check (result.rows == #[#[some value]]) "pool reuse cannot leak cross-tenant data"
+    -- Public callbacks can return a capability. Releasing its lease must remain
+    -- terminal even when the same physical connection is acquired again.
+    let (escaped, originalPid) ← need (← run (pool.withConnection fun connection => do
+      let result ← connection.query "SELECT pg_backend_pid()::text"
+      return (connection, result.rows)))
+    check (!(← run (escaped.query "SELECT 1")).isOk) "escaped connection rejects after release"
+    let (rejected, pid, stillUsable) ← need (← run (pool.withConnection fun current => do
+      let pid ← current.query "SELECT pg_backend_pid()::text"
+      let rejected ← try
+        let _ ← escaped.query "SELECT 1"
+        pure false
+      catch _ => pure true
+      let result ← current.query "SELECT 42::text"
+      return (rejected, pid.rows, result.rows)))
+    check (pid == originalPid) "regression must reborrow the same physical connection"
+    check rejected "escaped connection cannot resurrect during another lease"
+    check (stillUsable == #[#[some "42"]]) "stale connection leaves the current lease usable"
+    let escapedScope ← need (← run (Postgres.Tenant.withTenant pool alpha pure))
+    let alphaQuery ← need (Tenant.Sql.select alpha table #[title])
+    let betaQuery ← need (Tenant.Sql.select beta table #[title])
+    let (rejected, betaRows) ← need (← run (Postgres.Tenant.withTenant pool beta fun current => do
+      let rejected ← try
+        let _ ← escapedScope.execute alphaQuery
+        pure false
+      catch _ => pure true
+      let result ← current.execute betaQuery
+      return (rejected, result.rows)))
+    check rejected "escaped typed tenant scope cannot resurrect in another tenant transaction"
+    check (betaRows == #[#[some "b"]]) "rejected stale scope preserves current transaction"
     let result ← need (← run (pool.query "SELECT count(*)::text FROM platform_tenant_items"))
     check (result.rows == #[#[some "0"]]) "RLS denies data without a transaction-local tenant"
     let forged ← run (pool.query "INSERT INTO platform_tenant_items(tenant_id,id,title) VALUES('alpha',2,'forged')")

@@ -1,0 +1,30 @@
+{
+  "browser": "158.0.8127.18",
+  "websocket": {
+    "transport": "websocket",
+    "count": "1",
+    "version": "1",
+    "unchangedNodePreserved": true
+  },
+  "sse": {
+    "transport": "sse",
+    "count": "1",
+    "version": "1",
+    "error": null
+  },
+  "csp": {
+    "allowed": true,
+    "wrongBlocked": true,
+    "missingBlocked": true,
+    "headerMatches": true,
+    "freshOnSecondRequest": true
+  },
+  "runner": "native loopback server + Playwright CLI real browser",
+  "source_sha256": {
+    "test/browser_realtime.cjs": "b843fade6f178c64494bfa8f8e40e7e8be5e8b631ec190efd328f03d6a78b810",
+    "LeanWeave/Test/RealtimeFixture.lean": "81f06e28b671198c16c75e52f01f8978758a04696dd06db3a111ae69fdcef694",
+    "LeanWeave/Live.lean": "1cd3c54c09deae160f51772ba51994bea61ccca2e0adc11909dee778be9072bd",
+    "LeanWeave/Live/Client.lean": "3dda10130655de23baed558849bf5b05d5e22d64809e3c393e4a10363e30f954",
+    "LeanWeave/Security/Csp.lean": "6a433c6c6422e114ee9bbb266fed3d0424514d249a9fa08e990ea389781b7469"
+  }
+}
