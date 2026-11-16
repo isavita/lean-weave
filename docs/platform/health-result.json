@@ -28,7 +28,7 @@
   "pools_closed_before_process_exit": true,
   "backend_count_after_exit": 0,
   "shutdown_signal": "SIGTERM",
-  "observed_shutdown_seconds": 0.426079,
+  "observed_shutdown_seconds": 0.427926,
   "native_shutdown_budget_ms": 1000,
   "hard_filesystem_deadline_claimed": false,
   "persistent_service_started": false,

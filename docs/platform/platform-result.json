@@ -110,6 +110,14 @@
     {
       "argv": [
         "/private/tmp/leanweave-http-venv/bin/python",
+        "test/platform/test_health_probes.py",
+        "-v"
+      ],
+      "cwd": "."
+    },
+    {
+      "argv": [
+        "/private/tmp/leanweave-http-venv/bin/python",
         "test/platform/health.py",
         "--pg-bin",
         "/opt/homebrew/opt/postgresql@17/bin"
@@ -157,6 +165,9 @@
     "adapters/http/LeanWeaveHttp/Vault.lean": "7b6be9cb3cd9acbaa539fdcbbc02c599570503cf98db4403754ad885a4bc1331",
     "adapters/http/c/http.c": "2f7bd62966de3f57816513f4b869333be8b2b049e8018fb925054f6e899fe861",
     "adapters/postgres/LeanWeavePostgres/Pool.lean": "15c8c8979ac9cde883e88bc5e1bd52d7dec72dd2575aad93dce89dc4b9a22ee2",
-    "adapters/postgres/LeanWeavePostgres/Tenant.lean": "b129ad10e6180e808c97cca1fe4252970213bf910175697ba924fce655bd571a"
+    "adapters/postgres/LeanWeavePostgres/Tenant.lean": "b129ad10e6180e808c97cca1fe4252970213bf910175697ba924fce655bd571a",
+    "test/platform/health.py": "5946c7fd35f59e93cc894317856eca0e0d80d5e54d06cb103864687d2d1d3335",
+    "test/platform/run.py": "60a3c509a7c4cf1c2ab7eae24259b002fbf7a99661686e2a059ddf6240346c10",
+    "test/platform/test_health_probes.py": "2d237961eecd4590b3728effdf90feeb8e9995e3fcc59e07ed0be9ab283bce37"
   }
 }
