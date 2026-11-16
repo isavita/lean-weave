@@ -2,17 +2,65 @@
   "native": [
     {
       "tls": false,
+      "http2": false,
+      "protocol": "http/1.1",
+      "alpn": null,
       "passed": true,
       "automatic_spans": 6,
       "bounds_timeout_disconnect": true,
-      "chunked": true
+      "chunked_or_h2_data_and_trailers": true,
+      "negative_tls_hostname_and_trust": false,
+      "active_operation_limit": true,
+      "header_origin_injection": true,
+      "startup_ca_no_request_file_dependency": false,
+      "strict_ca_startup_bounds": false,
+      "explicit_system_trust_opt_in": false,
+      "negotiation_asserted_by_header": true,
+      "server_connections": 0
     },
     {
       "tls": true,
+      "http2": false,
+      "protocol": "http/1.1",
+      "alpn": "http/1.1",
       "passed": true,
       "automatic_spans": 6,
       "bounds_timeout_disconnect": true,
-      "chunked": true
+      "chunked_or_h2_data_and_trailers": true,
+      "negative_tls_hostname_and_trust": true,
+      "active_operation_limit": true,
+      "header_origin_injection": true,
+      "startup_ca_no_request_file_dependency": true,
+      "strict_ca_startup_bounds": true,
+      "explicit_system_trust_opt_in": true,
+      "negotiation_asserted_by_header": true,
+      "server_connections": 5
+    },
+    {
+      "tls": true,
+      "http2": true,
+      "protocol": "h2",
+      "alpn": "h2",
+      "passed": true,
+      "automatic_spans": 6,
+      "bounds_timeout_disconnect": true,
+      "chunked_or_h2_data_and_trailers": true,
+      "negative_tls_hostname_and_trust": true,
+      "active_operation_limit": true,
+      "header_origin_injection": true,
+      "startup_ca_no_request_file_dependency": true,
+      "strict_ca_startup_bounds": true,
+      "explicit_system_trust_opt_in": true,
+      "negotiation_asserted_by_header": true,
+      "server_connections": 8
     }
-  ]
+  ],
+  "platform": "macOS-27.2.1-arm64-arm-64bit-Mach-O",
+  "independent_h2": "4.4.1",
+  "sources_sha256": {
+    "test/Main.lean": "c5b4dfd6f06f0f2e09728e05c47b6b493ac9dfb69c36dc0b1ec681d07666e317",
+    "test/wire.py": "bdbb35d272a4174ae8203950667913ad082dfb432d83a0e51319ce8f7c8bf3db",
+    "LeanWeaveHttp/Client.lean": "e506c47f9c20f220dd40c019278ad87899447c7b42a405da080b13bd8f0551ed",
+    "c/http.c": "7c60c6368b62c206501074228bdec240fc66c8ca7ab83d094854e8f5921af379"
+  }
 }
