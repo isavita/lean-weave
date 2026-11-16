@@ -4,6 +4,7 @@ No service is installed or retained. The reported shutdown duration is observed;
 this test makes no hard filesystem latency guarantee.
 """
 from pathlib import Path
+from collections import deque
 import argparse
 import hashlib
 import http.client
@@ -48,6 +49,72 @@ def wait(condition, message, timeout=6, diagnostics=None):
     raise AssertionError(message + ': ' + json.dumps(detail, sort_keys=True))
 
 
+class OwnerProbes:
+    """Keep a verified HTTP/1 connection to each actual reactor owner.
+
+    Linux SO_REUSEPORT hashes new TCP connections; a fixed sample size cannot
+    establish coverage. Discovery is bounded, then every owner assertion uses
+    its retained connection and checks the owner header again on each reply.
+    """
+    def __init__(self, port, live_process=lambda: None, connection_factory=None):
+        self.port = port
+        self.live_process = live_process
+        self.connection_factory = connection_factory or (lambda: http.client.HTTPConnection('127.0.0.1', port, timeout=2))
+        self.owners = {}
+        self.history = deque(maxlen=128)
+        self.sequence = 0
+        self.discovery_requests = 0
+
+    def _request(self, connection, probe, method, expected_owner=None):
+        self.live_process()
+        connection.request(method, '/health/' + probe)
+        response = connection.getresponse()
+        headers = {key.lower(): value for key, value in response.getheaders()}
+        body = response.read()
+        self.sequence += 1
+        observation = {'sequence': self.sequence, 'probe': probe, 'method': method,
+            'expected_owner': expected_owner, 'status': response.status, 'headers': headers,
+            'body': body.decode('utf-8', errors='replace')}
+        self.history.append(observation)
+        if expected_owner is not None:
+            assert headers.get('x-health-owner') == expected_owner, ('retained connection changed owner', observation)
+        return response.status, headers, body
+
+    def request(self, probe, method='GET', owner=None):
+        connection = self.owners[owner] if owner is not None else self.connection_factory()
+        try: return self._request(connection, probe, method, owner)
+        finally:
+            if owner is None: connection.close()
+
+    def discover(self, expected=('0', '1'), timeout=6, max_connections=64):
+        cutoff = time.monotonic() + timeout
+        for _ in range(max_connections):
+            if time.monotonic() >= cutoff: break
+            connection = self.connection_factory()
+            retained = False
+            try:
+                self.discovery_requests += 1
+                status, headers, _ = self._request(connection, 'live', 'GET')
+                owner = headers.get('x-health-owner')
+                assert status == 200 and owner in expected, ('owner discovery reply', list(self.history))
+                if owner not in self.owners:
+                    self.owners[owner] = connection
+                    retained = True
+                if set(self.owners) == set(expected): return
+            finally:
+                if not retained: connection.close()
+        raise AssertionError(('bounded owner discovery failed', sorted(self.owners), list(self.history)))
+
+    def all_statuses(self, probe, expected):
+        assert set(self.owners) == {'0', '1'}, 'discover both owners before asserting health'
+        samples = [self.request(probe, owner=owner) for owner in ('0', '1')]
+        return all(status == expected for status, _, _ in samples)
+
+    def close(self):
+        for connection in self.owners.values(): connection.close()
+        self.owners.clear()
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--pg-bin', default=os.environ.get('WEAVE_PG_BIN'))
@@ -64,24 +131,12 @@ def main():
         paused = []
         peer = None
         next_stream = 1
-        observed_http1 = {}
         def live_process():
             if process.poll() is not None:
                 log.seek(0)
                 raise AssertionError(f'health process exited {process.returncode}: {log.read()}')
-        def http1(probe, method='GET'):
-            live_process()
-            connection = http.client.HTTPConnection('127.0.0.1', port, timeout=2)
-            try:
-                connection.request(method, '/health/' + probe)
-                response = connection.getresponse()
-                headers = {key.lower(): value for key, value in response.getheaders()}
-                body = response.read()
-                observed_http1.setdefault(probe, {})[headers.get('x-health-owner', 'unknown')] = {
-                    'status': response.status, 'pending': headers.get('x-health-probe-pending'),
-                    'body': body.decode('utf-8', errors='replace')}
-                return response.status, headers, body
-            finally: connection.close()
+        probes = OwnerProbes(port, live_process)
+        http1 = probes.request
         def http2(probe, method=b'GET'):
             nonlocal next_stream
             live_process()
@@ -102,7 +157,7 @@ def main():
             state = ' AND state IS NOT NULL' if authenticated else ''
             return int(pg.sql(f"SELECT count(*) FROM pg_stat_activity WHERE usename='{role}'{state};").strip())
         def diagnostics():
-            result = {'process_returncode': process.poll(), 'http1_by_owner': observed_http1}
+            result = {'process_returncode': process.poll(), 'http1_observations': list(probes.history)}
             if paused:
                 result['postgres'] = 'backend processes paused; SQL deferred until resume'
             else:
@@ -146,11 +201,7 @@ def main():
                     assert head2[field] == headers2[field]
                 assert int(head2[b'content-length']) == len(body)
         def all_http1(probe, expected):
-            # Require fresh snapshots from both owners, rather than relying on
-            # how a particular platform balances this connection sample.
-            samples = [http1(probe) for _ in range(4)]
-            return {headers['x-health-owner'] for _, headers, _ in samples} == {'0', '1'} and all(
-                status == expected for status, _, _ in samples)
+            return probes.all_statuses(probe, expected)
         def stop():
             if process.poll() is None:
                 process.send_signal(signal.CTRL_BREAK_EVENT if os.name == 'nt' else signal.SIGTERM)
@@ -159,14 +210,14 @@ def main():
                 process.kill(); process.wait(); raise AssertionError('native health shutdown exceeded external test deadline')
         try:
             wait_phase(lambda: http1('live')[0] == 200, 'native health listener startup deadline')
+            probes.discover()
             peer = H2Client(port)
             assert_phase({'live': 200, 'startup': 503, 'ready': 503})
             assert backends(authenticated=True) == 0
             pg.sql(f'ALTER ROLE {role} LOGIN;')
             wait_phase(lambda: all_http1('ready', 200) and backends(authenticated=True) == 2, 'both owner TLS probes failed to initialize')
             assert_phase({'live': 200, 'startup': 200, 'ready': 200})
-            owners = {http1('live')[1]['x-health-owner'] for _ in range(6)}
-            assert owners == {'0', '1'}, owners
+            assert {http1('live', owner=owner)[1]['x-health-owner'] for owner in ('0', '1')} == {'0', '1'}
             tls = int(pg.sql(f"SELECT count(*) FROM pg_stat_ssl s JOIN pg_stat_activity a USING(pid) WHERE a.usename='{role}' AND s.ssl;").strip())
             assert tls == 2, 'pool dependencies were not real TLS connections'
             assert pg.sql(f"SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname='{role}';").strip() == 'f'
@@ -191,10 +242,13 @@ def main():
                 assert len(paused) == 2
                 for pid in paused: os.kill(pid, signal.SIGSTOP)
                 def pending():
-                    status, headers, _ = http1('live')
-                    assert status == 200
-                    if headers['x-health-probe-pending'] == '1': pending_owners.add(headers['x-health-owner'])
-                    return pending_owners == {'0', '1'}
+                    pending_now = set()
+                    for owner in ('0', '1'):
+                        status, headers, _ = http1('live', owner=owner)
+                        assert status == 200, diagnostics()
+                        if headers['x-health-probe-pending'] == '1': pending_now.add(owner)
+                    pending_owners.update(pending_now)
+                    return pending_now == {'0', '1'}
                 wait_phase(pending, 'owner probe executions did not become pending', timeout=.7)
                 assert all_http1('startup', 200), ('startup regressed while a probe was pending', diagnostics())
                 assert_phase({'live': 200, 'startup': 200})
@@ -211,6 +265,8 @@ def main():
             report = {
                 'passed': True, 'platform': platform.platform(), 'postgres_tls': 'verify-full localhost with numeric hostaddr',
                 'owners': 2, 'connections_per_owner': 1, 'max_probe_executions_per_owner': 1,
+                'http1_assertions_use_verified_owner_connections': True,
+                'owner_connection_discovery_requests': probes.discovery_requests,
                 'probe_source': 'onTick SELECT 1; HTTP callbacks read snapshots only',
                 'initial_live': 200, 'initial_startup': 503, 'initial_ready': 503,
                 'all_three_probes_http1_http2': True, 'head_get_metadata_and_no_body_data': True,
@@ -223,10 +279,15 @@ def main():
                 'observed_shutdown_seconds': round(elapsed, 6), 'native_shutdown_budget_ms': 1000,
                 'hard_filesystem_deadline_claimed': False, 'persistent_service_started': False,
             }
+        except Exception:
+            try: print('health failure observations: ' + json.dumps(diagnostics(), sort_keys=True), file=sys.stderr)
+            except Exception as error: print('health diagnostics failed: ' + repr(error), file=sys.stderr)
+            raise
         finally:
             for pid in paused:
                 try: os.kill(pid, signal.SIGCONT)
                 except ProcessLookupError: pass
+            probes.close()
             if peer is not None: peer.close()
             stop()
             if process.returncode:
@@ -234,7 +295,8 @@ def main():
                 print(log.read(), file=sys.stderr)
     sources = [
         'integration/platform/Health.lean', 'integration/platform/Main.lean', 'integration/platform/lakefile.toml',
-        'test/platform/health.py', 'LeanWeave/Operations/Health.lean', 'LeanWeave/Core/Server.lean',
+        'test/platform/health.py', 'test/platform/test_health_probes.py',
+        'LeanWeave/Operations/Health.lean', 'LeanWeave/Core/Server.lean',
         'LeanWeave/Core/AppM.lean', 'adapters/postgres/LeanWeavePostgres/Pool.lean',
         'adapters/postgres/test/cluster_support.py', 'integration/platform/lake-manifest.json', 'lake-manifest.json',
     ]
