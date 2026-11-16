@@ -11,7 +11,7 @@
   "client": "grpc-web 2.1.1; google-protobuf 4.0.3",
   "transport": "real browser XMLHttpRequest to native HTTP1 TCP; no TLS",
   "browser": "158.0.8127.18",
-  "sourceCommit": "7c819d73dbece4f3570c1ecf8f520e70b06cb5f5",
+  "sourceCommit": "d2f2e0230f50ac18b2c530355189908b0abc9c91",
   "sourceDirty": true,
   "source_sha256": {
     "LeanWeave/Core/AppM.lean": "b431767c9eadaefcbd5f02e0cc06a6c370fcdabb07a04d889fbc0cd4cbfca801",
@@ -50,14 +50,14 @@
     "scripts/protocol-browser/browser.js": "ee08304ea9ccdfe5b09af706d4655a2d9717efdc534fd334d7dd9aa519148da0",
     "scripts/protocol-browser/package-lock.json": "af06ec92b32c433b56a04261ee5897cb8e1424d9af1d956b933cbeb44e1b1f32",
     "scripts/protocol-browser/package.json": "40cb27fdddc80d6ef3397b52b02ffae95562027572b5192b53b326d682a6c71e",
-    "scripts/protocol_evidence.py": "b7e340a857b5634318f01c06f4aa713413ccba000cdbf20ed940ae878d0176b6",
-    "scripts/test_grpc_web_browser.py": "b6f06ee7d6c5eaaeccf6e0010259894fde255877709fdfd4d86c486d42bee180",
-    "scripts/test_protocol_compile.py": "9ddcf54ffc7acf83d9896656f289ce02cd73280a1e37c2549391eac1d7de7f2c",
-    "scripts/test_protocols.py": "b5e7728c4a93278a1a49b9b65a6ca8198dd4facbd4c5ca89987dc39c63e255b8"
+    "scripts/protocol_evidence.py": "874dc2c65d0c3339f7d1a6aaee4ebdf096db9034190900bfbf24122ce285e9e8",
+    "scripts/test_grpc_web_browser.py": "a040825e311e14b8d23896f7edc613ded6ec50fd3762922ec77f32be221e2c1c",
+    "scripts/test_protocol_compile.py": "36af2b824900643ea76b3e6058c19819dac1e3ad9aa173e89ee9b090073479fa",
+    "scripts/test_protocols.py": "63fef6c45faf5f49175301097a3eaa15db0d1804dba85c25b59768bd3eb665b1"
   },
   "lean_net_revision": "05733390a34012b2a388fd35bf2eb704916c30be",
   "host": "macOS-27.2.1-arm64-arm-64bit",
-  "recordedAt": "2026-11-16T17:29:13.510559+00:00",
+  "recordedAt": "2026-11-16T17:48:59.708148+00:00",
   "fixture_sha256": "786456be87215dc54617d6388352bcca067a2278652ff16240bc05adc5ccb919",
   "browserEngine": "chromium",
   "browser_bundle_sha256": "fab41c4b474c9849e57eebbea313d4f69797e98860d3de0fabb595dfc583db00"

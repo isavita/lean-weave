@@ -1,17 +1,21 @@
 #!/usr/bin/env python3
 """Cross-platform process contract; real protocol wire tests exercise native I/O.
 
-Only the child process and readiness socket are substituted. The production
-fixture context manager itself chooses its executable, process group, signals,
-deadlines and exit-status validation on both platform branches.
+Platform cases substitute only the child process and readiness socket. The
+production context manager chooses its executable, group, signals, deadlines
+and exit-status validation. The encoding case compiles real Unicode Lean input
+and reads real compiler diagnostics with forced cp1252 parent defaults.
 """
 from contextlib import ExitStack, contextmanager
+import io
+import locale
 import signal
 import subprocess
 import unittest
 from unittest.mock import MagicMock, patch
 
 import test_protocols as protocols
+import test_protocol_compile as compiler
 
 
 class ProtocolLauncher(unittest.TestCase):
@@ -35,6 +39,21 @@ class ProtocolLauncher(unittest.TestCase):
                 ('linux', 'weave-protocol-fixture'), ('darwin', 'weave-protocol-fixture')]:
             with self.subTest(platform=platform_name), patch.object(protocols.sys, 'platform', platform_name):
                 self.assertEqual(protocols.default_executable(), protocols.ROOT / '.lake/build/bin' / filename)
+
+    def test_unicode_source_and_diagnostics_with_cp1252_defaults(self):
+        original_open = io.open
+        def legacy_open(file, mode='r', buffering=-1, encoding=None, errors=None,
+                newline=None, closefd=True, opener=None):
+            if 'b' not in mode and encoding in (None, 'locale'):
+                encoding = 'cp1252'
+            return original_open(file, mode, buffering, encoding, errors, newline, closefd, opener)
+        with patch.object(io, 'open', legacy_open), \
+                patch.object(locale, 'getpreferredencoding', return_value='cp1252'), \
+                patch.object(locale, 'getencoding', return_value='cp1252', create=True):
+            # Both the UTF-8 file and the real Lean subprocess diagnostics must
+            # preserve characters absent from the Windows legacy code page.
+            compiler.run('def unicodeValue : String := "héllo ⟨😀⟩"', True)
+            compiler.run('def unicodeValue : Nat := "héllo ⟨😀⟩"', False, '⟨😀⟩')
 
     def test_windows_group_receives_ctrl_break(self):
         with self.child('win32') as (process, launch):

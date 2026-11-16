@@ -27,10 +27,10 @@ def source_receipt(executable=None):
         sources.add(ROOT / name)
     sources = sorted(path for path in sources if path.is_file())
     env = dict(os.environ, GIT_OPTIONAL_LOCKS='0')
-    manifest = json.loads((ROOT / 'lake-manifest.json').read_text())
+    manifest = json.loads((ROOT / 'lake-manifest.json').read_text(encoding='utf-8'))
     receipt = {
-        'sourceCommit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, env=env, text=True).strip(),
-        'sourceDirty': bool(subprocess.check_output(['git', 'status', '--porcelain'], cwd=ROOT, env=env, text=True).strip()),
+        'sourceCommit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, env=env, text=True, encoding='utf-8').strip(),
+        'sourceDirty': bool(subprocess.check_output(['git', 'status', '--porcelain'], cwd=ROOT, env=env, text=True, encoding='utf-8').strip()),
         'source_sha256': {str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest() for path in sources},
         'lean_net_revision': next(package.get('rev') for package in manifest['packages'] if 'lean-net' in package['name']),
         'host': platform.platform(),

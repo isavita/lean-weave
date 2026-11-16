@@ -12,8 +12,8 @@ open scoped LeanWeave.Schema LeanWeave.OpenApi LeanWeave.Protobuf LeanWeave.Grpc
 
 def run(source,success,fragment=''):
     with tempfile.TemporaryDirectory(prefix='weave-compile-') as directory:
-        path=pathlib.Path(directory)/'Check.lean';path.write_text(PRELUDE+source)
-        result=subprocess.run(['lake','env','lean',str(path)],cwd=ROOT,text=True,capture_output=True,timeout=40)
+        path=pathlib.Path(directory)/'Check.lean';path.write_text(PRELUDE+source,encoding='utf-8')
+        result=subprocess.run(['lake','env','lean',str(path)],cwd=ROOT,text=True,encoding='utf-8',capture_output=True,timeout=40)
     output=result.stdout+result.stderr
     assert (result.returncode==0)==success,output
     assert fragment in output,(fragment,output)
@@ -53,5 +53,5 @@ if __name__=='__main__':
     report={'passed':len(cases)+1,'positive':1,'negative':len(cases),'checks':[name for name,_,_ in cases],**source_receipt()}
     if args.report:
         args.report.parent.mkdir(parents=True,exist_ok=True)
-        args.report.write_text(json.dumps(report,indent=2)+'\n')
+        args.report.write_text(json.dumps(report,indent=2)+'\n',encoding='utf-8')
     print(json.dumps(report))

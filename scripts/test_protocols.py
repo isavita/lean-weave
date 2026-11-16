@@ -39,11 +39,11 @@ def decode_base64_segments(payload):
     return b''.join(base64.b64decode(payload[n:n+4], validate=True) for n in range(0, len(payload), 4))
 
 def messages():
-    text = (ROOT/'LeanWeave/Test/ProtocolFixture.lean').read_text()
+    text = (ROOT/'LeanWeave/Test/ProtocolFixture.lean').read_text(encoding='utf-8')
     source = json.loads(re.search(r'protobuf_schema ProtocolTest := ("(?:[^"\\]|\\.)*")', text, re.S).group(1), strict=False)
     with tempfile.TemporaryDirectory(prefix='weave-proto-') as directory:
         path = pathlib.Path(directory)
-        (path/'fixture.proto').write_text(source)
+        (path/'fixture.proto').write_text(source,encoding='utf-8')
         assert protoc.main(['protoc', '-I'+directory, '--descriptor_set_out='+str(path/'schema.pb'), str(path/'fixture.proto')]) == 0
         file_set = descriptor_pb2.FileDescriptorSet.FromString((path/'schema.pb').read_bytes())
     pool = descriptor_pool.DescriptorPool()
@@ -72,7 +72,7 @@ def fixture(executable):
                 process.send_signal(signal.CTRL_BREAK_EVENT if sys.platform == 'win32' else signal.SIGTERM)
                 try: process.wait(timeout=4)
                 except subprocess.TimeoutExpired: process.kill(); process.wait(timeout=4)
-            log.seek(0); output=log.read().decode(errors='replace')
+            log.seek(0); output=log.read().decode('utf-8',errors='replace')
             assert process.returncode == 0, f'fixture exit {process.returncode}: {output}'
 
 def h1(port, path, payload=b'', media='application/grpc-web+proto', headers=None, method='POST'):
@@ -220,5 +220,5 @@ if __name__=='__main__':
     parser.add_argument('--executable',type=pathlib.Path,default=default_executable())
     parser.add_argument('--report',type=pathlib.Path)
     args=parser.parse_args();report=run(args.executable)
-    if args.report:args.report.parent.mkdir(parents=True,exist_ok=True);args.report.write_text(json.dumps(report,indent=2)+'\n')
+    if args.report:args.report.parent.mkdir(parents=True,exist_ok=True);args.report.write_text(json.dumps(report,indent=2)+'\n',encoding='utf-8')
     print(json.dumps(report,indent=2))

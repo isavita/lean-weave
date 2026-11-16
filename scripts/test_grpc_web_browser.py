@@ -26,7 +26,7 @@ def main():
         with fixture(args.executable) as port, tempfile.TemporaryDirectory(prefix='weave-grpc-web-') as directory:
             cli=shlex.split(args.cli)+['--session','weave-grpc-'+uuid.uuid4().hex[:8]]
             def command(*parts):
-                result=subprocess.run(cli+list(parts),cwd=directory,text=True,capture_output=True,timeout=45)
+                result=subprocess.run(cli+list(parts),cwd=directory,text=True,encoding='utf-8',capture_output=True,timeout=45)
                 if result.returncode:raise RuntimeError(result.stdout+result.stderr)
                 return result.stdout
             try:
@@ -38,7 +38,7 @@ def main():
                 report['browser_bundle_sha256']=hashlib.sha256(bundle.read_bytes()).hexdigest()
                 if args.report:
                     args.report.parent.mkdir(parents=True,exist_ok=True)
-                    args.report.write_text(json.dumps(report,indent=2)+'\n')
+                    args.report.write_text(json.dumps(report,indent=2)+'\n',encoding='utf-8')
                 print(json.dumps(report,indent=2))
             finally:command('close')
     finally:
