@@ -18,7 +18,7 @@ private def values (headers : Array LeanNet.HTTP1.Header) (name : String) : Stri
   String.intercalate "," ((headers.filter (fun h => h.name.toLower == name)).toList.map fun h => (String.fromUTF8? h.value).getD "no-store")
 
 def eligibleRequest (ctx : Context) : Bool :=
-  (ctx.request.method == "GET" || ctx.request.method == "HEAD") && !ctx.authenticated &&
+  (ctx.request.method == "GET" || ctx.request.method == "HEAD") && ctx.attribute "tenant.cache.enabled" != some "false" && !ctx.authenticated &&
   ctx.sessionId.isNone && ctx.request.clientCertificate.isNone && !(ctx.request.headers.any (fun h => ["authorization", "cookie"].contains h.name.toLower)) &&
   !(directive (values ctx.request.headers "cache-control") "no-cache") &&
   !(directive (values ctx.request.headers "cache-control") "no-store")
@@ -26,7 +26,7 @@ def eligibleRequest (ctx : Context) : Bool :=
 def eligibleResponse (policy : Policy) (response : Response) : Bool :=
   let cc := values response.headers "cache-control"
   let vary := tokens (values response.headers "vary")
-  response.status == 200 && directive cc "public" && !directive cc "private" &&
+  response.stream.isNone && response.status == 200 && directive cc "public" && !directive cc "private" &&
     !directive cc "no-store" && !directive cc "no-cache" &&
     !(response.headers.any (fun h => h.name.toLower == "set-cookie")) && !vary.contains "*" &&
     vary.all (fun name => name.isEmpty || policy.vary.any (·.toLower == name))
@@ -37,8 +37,16 @@ private def rawHeaderKey (ctx : Context) (name : String) : String :=
 
 def responseKey (ctx : Context) (policy : Policy) : String :=
   key (#["response", policy.version, ctx.host, ctx.tenant, ctx.routeName,
-    key ctx.path, key (ctx.query.map fun (k,v) => key #[k,v]), ctx.locale] ++
+    key ctx.path, key (ctx.query.map fun (k,v) => key #[k,v]), ctx.locale,
+    (ctx.attribute "tenant.config.revision").getD "", (ctx.attribute "feature.variant").getD ""] ++
     policy.vary.map (fun name => key #[name.toLower, rawHeaderKey ctx name]))
+
+/-- Dynamic tenant settings can tighten a route's TTL; the tenant revision and
+feature variant are also part of every response/fragment key. -/
+def effectivePolicy (ctx : Context) (policy : Policy) : Policy :=
+  match (ctx.attribute "tenant.cache.ttlMs").bind String.toNat? with
+  | some ttl => { policy with ttlMs := min ttl policy.ttlMs }
+  | none => policy
 
 /-- Route TTL is capped by response freshness; s-maxage overrides max-age.
     Invalid or repeated freshness directives make the response uncacheable. -/
@@ -110,6 +118,7 @@ def decodeResponse (bytes : ByteArray) : Option (Response × Nat) := do
 /-- Create once per worker. HEAD reuses the complete GET representation metadata.
     Miss contenders fail fast; they never form an unbounded waiter queue. -/
 def middleware (store : Store) (policy : Policy := {}) : Middleware := fun next ctx => do
+  let policy := effectivePolicy ctx policy
   if !eligibleRequest ctx || policy.vary.any (fun name => (ctx.request.headers.filter (fun h => h.name.toLower == name.toLower)).size > 1) then return ← next ctx
   let cacheKey := responseKey ctx policy
   if let some bytes ← store.get cacheKey (← IO.monoMsNow) then
@@ -132,5 +141,17 @@ def middleware (store : Store) (policy : Policy := {}) : Middleware := fun next 
         pure ()
       return conditional ctx response
     return response).ensuring (store.release cacheKey)
+
+/-- Context-aware fragment caching applies tenant rules and all response isolation
+keys. Low-level `fragment` remains available for explicit non-request keys. -/
+def requestFragment (store : Store) (ctx : Context) (name : String) (generate : AppM ByteArray)
+    (policy : Policy := {}) : AppM ByteArray := do
+  let policy := effectivePolicy ctx policy
+  if !eligibleRequest ctx || policy.ttlMs == 0 then return ← generate
+  let cacheKey := key #["fragment", name, responseKey ctx policy]
+  if ctx.request.method == "HEAD" then
+    if let some bytes ← store.get cacheKey (← IO.monoMsNow) then return bytes
+    return ← generate
+  fragment store cacheKey policy.ttlMs generate
 
 end LeanWeave.Cache
