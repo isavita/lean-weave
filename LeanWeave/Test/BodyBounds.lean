@@ -7,6 +7,15 @@ private def check (condition : Bool) (message : String) : IO Unit :=
 private def status (text : String) (limits : Body.Limits := {}) : Nat :=
   match Body.json text.toUTF8 limits with | .ok _ => 200 | .error error => error.status
 
+private def roundtrip (text : String) (limits : Body.Limits := {}) : IO Unit := do
+  let .ok value := Body.json text.toUTF8 limits | throw (IO.userError "roundtrip input rejected")
+  let canonical := value.compress
+  let .ok reparsed := Body.json canonical.toUTF8 limits | throw (IO.userError "canonical numeric representation rejected")
+  check (reparsed.compress == canonical) "canonical JSON must be stable after bounded reparse"
+  if let .num first := value then
+    let .num second := reparsed | throw (IO.userError "roundtrip numeric type changed")
+    check (!(first < second) && !(second < first)) "canonical number preserves exact mathematical value"
+
 private structure TypedNumbers where
   natural : Nat
   integer : Int
@@ -19,13 +28,33 @@ def run : IO Unit := do
     check (match Body.checkJsonNumbers source.toUTF8 with
       | .error error => error.status == 413 | .ok () => false) "lexical preflight rejects before any parsing test"
     check (status source == 413) "huge exponent rejected before expansion, including malformed suffix"
-  check (status (String.ofList (List.replicate 129 '9')) == 413) "long integer mantissa rejected"
-  check (status ("0." ++ String.ofList (List.replicate 128 '1')) == 413) "fraction counts towards total mantissa digits"
-  check (status ("1e" ++ String.ofList (List.replicate 129 '0')) == 413) "long leading-zero exponent bounded even at magnitude zero"
-  check (status (String.ofList (List.replicate 128 '9')) == 200) "exact mantissa boundary accepted"
-  check (status "1e1024" == 200 && status "1e1025" == 413 && status "1e-1024" == 200 && status "1e-1025" == 413) "symmetric exponent boundary"
+  check (status (String.ofList (List.replicate 513 '9')) == 413) "long integer mantissa rejected"
+  check (status ("0." ++ String.ofList (List.replicate 512 '1')) == 413) "fraction counts towards total mantissa digits"
+  check (status ("1e" ++ String.ofList (List.replicate 513 '0')) == 413) "long leading-zero exponent bounded even at magnitude zero"
+  check (status (String.ofList (List.replicate 512 '9')) == 200) "exact mantissa boundary accepted"
+  check (status "1e511" == 200 && status "1e512" == 413) "expanded positive-exponent mantissa bounded"
+  check (status "1e1024" == 413 && status "1e-1024" == 200 && status "1e-1025" == 413) "negative exponent boundary with bounded positive expansion"
   check (status "5e-324" == 200 && status "1.7976931348623157e308" == 200) "IEEE754 extremes remain representable"
   check (status "18446744073709551615" == 200 && status "-9223372036854775808" == 200) "UInt64/Int64 decimal ranges accepted"
+  check (status "0.1e-1023" == 200 && status "0.1e-1024" == 413) "fraction and negative exponent share denominator budget"
+  check (status "0.001" {maxExponentMagnitude := 2} == 413 && status "0.001e1" {maxExponentMagnitude := 2} == 200) "positive exponent cancels fraction places"
+  check (status "12.34e3" {maxNumberDigits := 4} == 413 && status "12.34e2" {maxNumberDigits := 4} == 200) "positive expansion includes fraction offset"
+  let boundarySmall := "0." ++ String.ofList (List.replicate 502 '9') ++ "e-522"
+  let oversizedSmall := "0." ++ String.ofList (List.replicate 503 '9') ++ "e-521"
+  check (status boundarySmall == 200 && status oversizedSmall == 413) "canonical leading decimal padding budget"
+  for source in #["1.7e308", "1.7976931348623157e308", "5e-324", "1e511", "1e-1024", "0.1e-1023",
+      "0e-1024", "-0e-1024", "0.0e-1023", "-0.000e10", "0.100e-1021", boundarySmall,
+      String.ofList (List.replicate 512 '9'), "{\"n\":[0e-1024,1.7e308,5e-324]}"] do roundtrip source
+  let .ok expanded := Body.json "1.7e308".toUTF8 | throw (IO.userError "finite float spelling rejected")
+  check (expanded.compress.utf8ByteSize == 309) "IEEE normal canonical 309-digit integer remains within default"
+  let .ok zero := Body.json "0e-1024".toUTF8 | throw (IO.userError "zero exponent spelling rejected")
+  check (zero.compress == "0") "large-denominator zero normalizes before Lean's invalid 0.e serialization"
+  for digits in #[1,2,3,10,11,12,32] do
+    let limits : Body.Limits := { maxNumberDigits := digits, maxExponentMagnitude := 32 }
+    for exponent in [:33] do
+      for head in #["1e-", "10e-", "0.1e-", "0.0001e-", "0e-", "1e"] do
+        let source := head ++ toString exponent
+        if (Body.json source.toUTF8 limits).isOk then roundtrip source limits
   for source in #["0", "-0", "0.125", "-12.34E+2", "1e000000000000000000000001", "[1,-2,3.25,4e+2]"] do
     check (status source == 200) "standard numeric spelling preserved"
   for source in #["1e", "1e+", "1e-", "1e--2", "1e2.3", "1e2e3", "+1", "01", ".1", "1.", "--1", "[1 2]"] do
