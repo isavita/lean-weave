@@ -1,0 +1,30 @@
+{
+  "passed": true,
+  "platform": "macOS-27.2.1-arm64-arm-64bit",
+  "independent_clients": {
+    "h2": "4.3.0",
+    "hpack": "4.1.0",
+    "hyperframe": "6.1.0"
+  },
+  "duration_seconds": 6.616,
+  "native_dynamic_loading": true,
+  "same_process_same_path_reload": true,
+  "old_deferred_request_completes": true,
+  "stream_lease_until_close": true,
+  "generation_bound": 2,
+  "in_flight_bound": 2,
+  "failed_reload_preserves_active": true,
+  "http2_reset_unloads": true,
+  "head_closes_stream": true,
+  "sigterm_stream_shutdown": true,
+  "sources_sha256": {
+    "LeanWeave/Plugin/Manager.lean": "8966b15099036b9816a4d09bc7b929e9d126cd9dfd3732acbbdd2f4002363194",
+    "adapters/plugins/LeanWeavePlugins/Loader.lean": "805d50e233523a364c7809bc731a58e3b8b5e9689982855dbb951c517fb94607",
+    "adapters/plugins/LeanWeavePlugins/Native.lean": "87fd8d17f1043b95d801164cc5a4e338390719aa63fb7313bb06dc5024247e0e",
+    "adapters/plugins/c/plugins.c": "0cb0ee3f380466d2f3596fba9a2316636566cd2e0a94ffeb9d205c2f92704212",
+    "adapters/plugins/include/leanweave_plugin.h": "a98685e0cc2ed919fb1804f234c2add363982f55eba6fe7ab9aada5acb1add83",
+    "adapters/plugins/test/plugin.c": "82d91a5c1971163945daf2c36c5e0b8287fc5e100a088769f019b427bfed5175",
+    "adapters/plugins/test/Fixture.lean": "00a4f9ba91db10ba89f489a64b38948b49a27b407bef82d6047883bc671c2ec1",
+    "adapters/plugins/test/test_reload.py": "91d74ea0d3c1feb3fd95de3fa62f496f0ec91c7bf081d92fb978784882349ffd"
+  }
+}

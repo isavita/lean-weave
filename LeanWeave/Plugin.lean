@@ -1,0 +1,1 @@
+import LeanWeave.Plugin.Manager
