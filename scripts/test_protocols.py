@@ -12,6 +12,7 @@ from grpc_tools import protoc
 from google.protobuf import descriptor_pb2, descriptor_pool, message_factory
 import google.protobuf
 import h2.config, h2.connection, h2.events
+from protocol_evidence import source_receipt
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SERVICE = '/leanweave.test.EchoService/'
@@ -207,10 +208,7 @@ def run(executable):
         check('actual typed REST handler + generated OpenAPI HTTP endpoint',openapi)
         channel.close()
     return {'passed':len(passed),'checks':passed,'clients':{'grpcio':grpc.__version__,'protobuf':google.protobuf.__version__},'host':platform.platform(),'transport':'real TCP loopback; HTTP1 and h2c; no TLS',
-        'sourceCommit':subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),
-        'sourceDirty':bool(subprocess.check_output(['git','status','--porcelain'],cwd=ROOT,text=True).strip()),
-        'fixtureSourceSha256':hashlib.sha256((ROOT/'LeanWeave/Test/ProtocolFixture.lean').read_bytes()).hexdigest(),
-        'recordedAt':datetime.datetime.now(datetime.timezone.utc).isoformat()}
+        **source_receipt(executable)}
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Build-time rejection checks for schema, protobuf, typed RPC and API DSLs."""
 import argparse,json,pathlib,subprocess,tempfile
+from protocol_evidence import source_receipt
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 PRELUDE='''import LeanWeave.Schema
 import LeanWeave.OpenApi
@@ -49,7 +50,7 @@ if __name__=='__main__':
     run('weave_schema Good where {text : String checks {minLength 1}, age : Nat checks {maximum 99}}\n'+proto('message A {string text=1; optional int32 age=2;} service S {rpc Call(A) returns(A);}')+'\ndef h (x : Bad.A) (_ : Context) : AppM Bad.A := pure x\ngrpc_service good where {rpc Bad.S.Call => h}',True)
     for name,source,fragment in cases:
         run(source,False,fragment);print('PASS',name,flush=True)
-    report={'passed':len(cases)+1,'positive':1,'negative':len(cases),'checks':[name for name,_,_ in cases]}
+    report={'passed':len(cases)+1,'positive':1,'negative':len(cases),'checks':[name for name,_,_ in cases],**source_receipt()}
     if args.report:
         args.report.parent.mkdir(parents=True,exist_ok=True)
         args.report.write_text(json.dumps(report,indent=2)+'\n')

@@ -5,7 +5,8 @@ Requires test_protocols.py's Python environment, Node/npm and installed Playwrig
 browser. Runs CLI automation, not a DOM/network mock. Default WebKit; --browser
 chrome/firefox/msedge works when installed. Use --cli for a local playwright-cli.
 """
-import argparse,json,os,pathlib,shlex,subprocess,tempfile,uuid
+import argparse,json,os,pathlib,shlex,subprocess,tempfile,uuid,hashlib
+from protocol_evidence import source_receipt
 from test_protocols import ROOT,fixture
 
 def main():
@@ -32,6 +33,9 @@ def main():
                 command('open',f'http://127.0.0.1:{port}/health','--browser',args.browser)
                 output=command('run-code',"async page => { await page.addScriptTag({url:'/grpc-web-client.js'}); return {...(await page.evaluate(()=>window.runGrpcWebAcceptance())),browser:page.context().browser().version()}; }")
                 report=json.loads(output.split('### Result\n',1)[1].split('\n### ',1)[0])
+                report.update(source_receipt(args.executable))
+                report['browserEngine']=args.browser
+                report['browser_bundle_sha256']=hashlib.sha256(bundle.read_bytes()).hexdigest()
                 if args.report:
                     args.report.parent.mkdir(parents=True,exist_ok=True)
                     args.report.write_text(json.dumps(report,indent=2)+'\n')
