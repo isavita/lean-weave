@@ -22,8 +22,9 @@ JSON decoders preflight numeric literals before Lean's arbitrary-precision
 parser. Defaults bound mantissas and canonical decimal forms to 512 digits and
 explicit/effective denominator exponents to 1024; configurable limits cannot
 exceed 4096. This includes finite IEEE754 boundary values while rejecting tiny
-inputs such as `1e1000000000` before expansion. Accepted numbers survive bounded
-render/parse round trips; numeric zero is normalized before rendering. The same
+inputs such as `1e1000000000` before expansion. Each accepted number survives
+compress/reparse under the same numeric limits; independent whole-document
+byte/depth/node limits still apply. Numeric zero is normalized before rendering. The same
 guard applies to JWT, audit replay, stored jobs/workflows, plugin headers,
 GraphQL numeric literals and OTLP responses. Numeric-looking strings stay strings.
 
