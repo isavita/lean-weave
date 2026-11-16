@@ -1,10 +1,10 @@
 {
-  "utc": "2026-11-16T16:23:14.929320+00:00",
+  "utc": "2026-11-16T17:13:16.000447+00:00",
   "platform": "macOS-27.2.1-arm64-arm-64bit",
   "machine": "arm64",
   "processor": "arm",
   "lean": "Lean (version 4.35.0, arm64-apple-darwin24.6.0, commit eb6cafb7290e8bd5f2937522d8d804f58f02bafc, Release)",
-  "commit": "5f6aa966b8678867719561405d656516cefe3241",
+  "commit": "0cf534071d6b2ac6b4965863c02a42607d1a90dc",
   "dirty": true,
   "source_sha256": {
     "benchmarks/Platform.lean": "14a587539a5f87f1bc2bfb232837a7ba44ce43607b123d5447ae783d91554e71",
@@ -16,63 +16,63 @@
     "LeanWeave/Observability/Logging.lean": "95de4128a262312c66e83c5b6375b11ff64914c0db40ef44d92ee2ceefbc1887",
     "LeanWeave/Realtime/PubSub.lean": "8d2a769ee6583b55a1dcc6a3793927d163ea186a27417bad4ece9c24b98612e6",
     "scripts/benchmark.py": "9b51ebeaf602ecafb78972f7f9c786bcc3767b5269c9b57e02c22a7bda4ffb40",
-    "lake-manifest.json": "d3080ee9a6cb2ec0ecfc6a040ae9355cd3b4a0523676edca888acc9d3d614fed"
+    "lake-manifest.json": "7a9fe35cecb081e2bee0634eaa2108e0368ea24dcf7fb2245b65085f0cfd7a80"
   },
-  "binary_sha256": "98bbf43ed5121274639cce99ed039f0d18e9f15819baef8b90741a83171c8580",
+  "binary_sha256": "3d86c40c7e799730b7937fbcefdf86819516b60e4b3f3c420e1a11694aa9eed9",
   "measurement": "Native wall time and IO.getNumHeartbeats thread-local small allocation deltas; excludes large byte buffers, native malloc, RSS, sockets and TLS. Counts include loop and IO scaffolding.",
   "samples": [
     {
       "checksum": 25000,
       "iterations": 5000,
       "name": "tenant_subdomain_resolution",
-      "nanoseconds": 3018250,
+      "nanoseconds": 3323583,
       "small_allocations": 70002,
-      "ns_per_iteration": 603.65,
+      "ns_per_iteration": 664.7166,
       "small_allocations_per_iteration": 14.0004
     },
     {
       "checksum": 25032450,
       "iterations": 5000,
       "name": "feature_sticky_cohort",
-      "nanoseconds": 14366167,
+      "nanoseconds": 15383541,
       "small_allocations": 82552,
-      "ns_per_iteration": 2873.2334,
+      "ns_per_iteration": 3076.7082,
       "small_allocations_per_iteration": 16.5104
     },
     {
       "checksum": 5000,
       "iterations": 5000,
       "name": "sampled_span_start_finish_take",
-      "nanoseconds": 99856750,
-      "small_allocations": 112419,
-      "ns_per_iteration": 19971.35,
-      "small_allocations_per_iteration": 22.4838
+      "nanoseconds": 110935625,
+      "small_allocations": 112507,
+      "ns_per_iteration": 22187.125,
+      "small_allocations_per_iteration": 22.5014
     },
     {
       "checksum": 993890,
       "iterations": 5000,
       "name": "structured_log_enqueue_take",
-      "nanoseconds": 32904917,
+      "nanoseconds": 35042667,
       "small_allocations": 500002,
-      "ns_per_iteration": 6580.9834,
+      "ns_per_iteration": 7008.5334,
       "small_allocations_per_iteration": 100.0004
     },
     {
       "checksum": 1622786,
       "iterations": 5000,
       "name": "audit_hash_chain_append",
-      "nanoseconds": 77120916,
+      "nanoseconds": 82191625,
       "small_allocations": 1545002,
-      "ns_per_iteration": 15424.1832,
+      "ns_per_iteration": 16438.325,
       "small_allocations_per_iteration": 309.0004
     },
     {
       "checksum": 5000,
       "iterations": 5000,
       "name": "local_pubsub_fanout_poll",
-      "nanoseconds": 4399459,
+      "nanoseconds": 4767750,
       "small_allocations": 180002,
-      "ns_per_iteration": 879.8918,
+      "ns_per_iteration": 953.55,
       "small_allocations_per_iteration": 36.0004
     }
   ]

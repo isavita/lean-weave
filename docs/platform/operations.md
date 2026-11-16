@@ -208,6 +208,9 @@ immutable storage does not promise physical zeroization of every collected copy.
 `Operations.Health.middleware` mounts `/health/live`, `/health/ready` and
 `/health/startup`. Startup is explicit, readiness also requires healthy required
 dependencies and no drain, and liveness stays successful during startup/drain.
+Startup and drain use GC-owned native monotone flags with lock-free atomic
+loads/stores. Completed startup stays successful while dependency state is busy;
+readiness fails closed when its snapshot cannot be acquired immediately.
 Dependency owners publish connectivity snapshots; probes never perform network
 checks on a request worker. Keep `Server.Config.net.healthPaths=false` (the default)
 when mounting these dependency-aware probes, so native transport-only probes do

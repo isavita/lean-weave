@@ -34,7 +34,7 @@
   "source_sha256": {
     "test/platform/external.py": "48d586aa8f2c3a9eacb118e962fc8a68945569812d0e2dac3e2780a967d367d3",
     "integration/platform/Main.lean": "4c735fc599533293f2c532f24a448576939d5ae967f5753b0fe510a268d5d7d6",
-    "integration/platform/lake-manifest.json": "849fe4857e1190285246e2f99fec37d02bdead859af4da926da7df4b839efa30",
+    "integration/platform/lake-manifest.json": "7cc3d763f2af9974e3b4db507dfd0478b7d8637326edd6991a51b4152f81b753",
     "LeanWeave/Core/AppM.lean": "b431767c9eadaefcbd5f02e0cc06a6c370fcdabb07a04d889fbc0cd4cbfca801",
     "LeanWeave/Core/Body.lean": "92ca432535b012037f6ed9024687f0094498f9ec4f83a05b2b98e2f3c29bd4ed",
     "LeanWeave/Observability/Trace.lean": "36e244dbc0c328fb39025f0cd2e38146fb1229e1d6b62d068f40d2b588d40d62",
@@ -45,7 +45,7 @@
     "adapters/http/LeanWeaveHttp/Client.lean": "97dd2b866dca2fab7991e606d74c4faf0e31d50f0be033d0e0c69e8eb83af30b",
     "adapters/http/LeanWeaveHttp/Otlp.lean": "572a1ebf1905fcd7b2ca1a4b6d581db0dd82535ffec30a7e64c0f070c1541972",
     "adapters/http/LeanWeaveHttp/Vault.lean": "7b6be9cb3cd9acbaa539fdcbbc02c599570503cf98db4403754ad885a4bc1331",
-    "adapters/http/c/http.c": "7c60c6368b62c206501074228bdec240fc66c8ca7ab83d094854e8f5921af379"
+    "adapters/http/c/http.c": "2f7bd62966de3f57816513f4b869333be8b2b049e8018fb925054f6e899fe861"
   },
-  "fixture_sha256": "a916b65f3d903451d41f89e3cb7d28349c7df87a98d110507c968d895d40b4ab"
+  "fixture_sha256": "e194d91d4972edf103ff7af8d72e0a05ee692c2c3fba42eb0a333de9778206d7"
 }

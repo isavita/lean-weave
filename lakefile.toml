@@ -5,7 +5,7 @@ defaultTargets = ["LeanWeave", "weave", "weave-test"]
 [[require]]
 name = "lean-net"
 git = "https://github.com/isavita/lean-net.git"
-rev = "dcce82480a6985b3269a474b12b81863e6bdb115"
+rev = "05733390a34012b2a388fd35bf2eb704916c30be"
 
 [[lean_lib]]
 name = "LeanWeave"
