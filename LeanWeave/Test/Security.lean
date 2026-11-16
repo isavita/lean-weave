@@ -67,6 +67,9 @@ def securityTests : IO Unit := do
   let post := { context with request := { context.request with method := "POST", headers := context.request.headers.push (header "content-type" "application/x-www-form-urlencoded"), body := ("_csrf=" ++ one.csrf).toUTF8 }, attributes := #[("csrf", one.csrf)] }
   let next : Handler := fun _ => pure (Response.text "ok")
   check ((← status (Middleware.csrf {} next) post) == 200) "valid CSRF token"
+  let uploadToken := ("--csrf\r\nContent-Disposition: form-data; name=\"_csrf\"\r\n\r\n" ++ one.csrf ++ "\r\n--csrf--\r\n").toUTF8
+  let upload := { post with request := { post.request with headers := #[header "host" "example.test", header "content-type" "multipart/form-data; boundary=\"csrf\""], body := uploadToken } }
+  check ((← status (Middleware.csrf {} next) upload) == 200) "multipart browser form CSRF token"
   let forged := { post with request := { post.request with body := "_csrf=forged".toUTF8 } }
   check ((← status (Middleware.csrf {} next) forged) == 403) "CSRF forgery rejected"
   let duplicate := { post with request := { post.request with body := ("_csrf=" ++ one.csrf ++ "&_csrf=" ++ one.csrf).toUTF8 } }

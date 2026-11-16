@@ -5,7 +5,7 @@ defaultTargets = ["LeanWeave", "weave", "weave-test"]
 [[require]]
 name = "lean-net"
 git = "https://github.com/isavita/lean-net.git"
-rev = "058d68acd742607207f558e1ac8309762f996f04"
+rev = "38cc472bdf48dde5170ae012988bed469c5ab5c0"
 
 [[lean_lib]]
 name = "LeanWeave"
@@ -13,6 +13,12 @@ name = "LeanWeave"
 [[lean_exe]]
 name = "weave"
 root = "Weave"
+needs = ["@/weave-dev-program"]
+
+[[input_file]]
+name = "weave-dev-program"
+path = "scripts/dev.py"
+text = true
 
 [[lean_exe]]
 name = "weave-test"

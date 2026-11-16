@@ -12,7 +12,7 @@ permissions:
 
 concurrency:
   group: api-docs-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -37,10 +37,14 @@ jobs:
       - name: Verify public package reference
         run: |
           test -s docs/.lake/build/doc/LeanWeaveDocs.html
-          test -s docs/.lake/build/doc/LeanNet.html
+          test -s docs/.lake/build/doc/LeanWeave/Core/Static.html
           test -s docs/.lake/build/doc/LeanWeave.html
           test -s docs/.lake/build/doc/LeanNet/HTTP/ReactorServer.html
           test -s docs/.lake/build/doc/LeanWeave/Router/Runtime.html
+          test -s docs/.lake/build/doc/LeanWeave/Html/Template.html
+          test -s docs/.lake/build/doc/LeanWeave/Cache/Response.html
+          test -s docs/.lake/build/doc/LeanWeave/Session/Store.html
+          test -s docs/.lake/build/doc/LeanWeave/Middleware/Basic.html
           python3 docs/prepare_site.py
           touch docs/.lake/build/doc/.nojekyll
       - name: Upload Pages artifact

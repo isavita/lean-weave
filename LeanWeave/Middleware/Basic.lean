@@ -80,12 +80,32 @@ def csrf (limits : Body.Limits := {}) : Middleware := fun next ctx => do
     | some token => pure token
     | none =>
       let contentType := (ctx.header "content-type").getD ""
-      unless (contentType.splitOn ";").head!.trimAscii.toString.toLower == "application/x-www-form-urlencoded" do
-        throw { status := 403, message := "CSRF token required" }
-      let fields ← match Body.form ctx.request.body limits with
-        | .ok fields => pure fields
-        | .error error => throw error
-      let values := fields.filter (·.1 == "_csrf")
+      let media := (contentType.splitOn ";").head!.trimAscii.toString.toLower
+      let values ← if media == "application/x-www-form-urlencoded" then do
+        let fields ← match Body.form ctx.request.body limits with
+          | .ok fields => pure fields
+          | .error error => throw error
+        pure (fields.filter (·.1 == "_csrf"))
+      else if media == "multipart/form-data" then do
+        let parameters := (contentType.splitOn ";").tail!.filterMap fun p =>
+          let pair := p.trimAscii.toString.splitOn "="
+          if pair.head!.trimAscii.toString.toLower == "boundary" then
+            some (String.intercalate "=" pair.tail!).trimAscii.toString else none
+        if parameters.length != 1 then throw { status := 400, message := "one multipart boundary required" }
+        let raw := parameters.head!
+        let boundary := if raw.startsWith "\"" && raw.endsWith "\"" then
+            ((raw.drop 1).toString.dropEnd 1).toString else raw
+        let parts ← match Body.multipart ctx.request.body boundary limits with
+          | .ok parts => pure parts
+          | .error error => throw error
+        let mut tokens := #[]
+        for part in parts do
+          if part.name == "_csrf" then
+            if part.filename.isSome then throw { status := 403, message := "CSRF token cannot be an upload" }
+            let some value := String.fromUTF8? part.bytes | throw { status := 403, message := "invalid CSRF token encoding" }
+            tokens := tokens.push ("_csrf", value)
+        pure tokens
+      else throw { status := 403, message := "CSRF token required" }
       if values.size != 1 then throw { status := 403, message := "exactly one CSRF token required" }
       pure values[0]!.2
   unless Session.tokenEquals expected token do throw { status := 403, message := "invalid CSRF token" }

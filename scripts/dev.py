@@ -7,6 +7,7 @@ A failed build preserves the running application. SIGINT/SIGTERM drain the child
 from __future__ import annotations
 import os
 from pathlib import Path
+import shutil
 import signal
 import subprocess
 import sys
@@ -61,11 +62,28 @@ def executable(target: str) -> Path:
     return Path(".lake/build/bin") / (target + (".exe" if os.name == "nt" else ""))
 
 
+def remove_snapshot(path: Path | None) -> None:
+    if path is None:
+        return
+    # A stopped Windows process can briefly retain a loader/antivirus mapping.
+    for attempt in range(20):
+        try:
+            path.unlink(missing_ok=True)
+            return
+        except PermissionError:
+            if attempt == 19:
+                raise
+            time.sleep(.05)
+
+
 def run(target: str) -> int:
     if not target or any(c not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_" for c in target):
         raise ValueError("target must be a simple Lake executable name")
     root = Path.cwd()
     child = None
+    child_snapshot = None
+    staged_snapshot = None
+    generation = 0
     stopping = False
 
     def on_signal(_signum, _frame):
@@ -94,15 +112,33 @@ def run(target: str) -> int:
                     path = executable(target)
                     if not path.is_file():
                         raise RuntimeError(f"build target is not an executable: {path}")
+                    staged_snapshot = None
+                    if os.name == "nt":
+                        # Windows cannot relink an executable that is running.
+                        # A sibling copy keeps the original build output unlocked
+                        # and preserves the executable's DLL search directory.
+                        generation += 1
+                        staged_snapshot = path.with_name(f".weave-dev-{target}-{os.getpid()}-{generation}.exe")
+                        shutil.copy2(path, staged_snapshot)
                     stop(child)
+                    child = None
+                    remove_snapshot(child_snapshot)
+                    child_snapshot = staged_snapshot
+                    staged_snapshot = None
                     print(f"[weave] starting {target}", flush=True)
-                    child = subprocess.Popen([str(path.resolve())], start_new_session=os.name == "posix",
+                    child = subprocess.Popen([str((child_snapshot or path).resolve())], start_new_session=os.name == "posix",
                                              creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0)
                 else:
                     print("[weave] build failed; application preserved", flush=True)
             time.sleep(POLL_SECONDS)
     finally:
-        stop(child)
+        try:
+            stop(child)
+        finally:
+            try:
+                remove_snapshot(child_snapshot)
+            finally:
+                remove_snapshot(staged_snapshot)
     return 0
 
 

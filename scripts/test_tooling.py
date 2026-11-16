@@ -9,6 +9,7 @@ from pathlib import Path
 import signal
 import socket
 import subprocess
+import sys
 import tempfile
 import time
 
@@ -68,6 +69,9 @@ def main():
                 assert b"Rebuilt, LeanWeave!" in response(port)[1], "failed build killed the last good server"
                 (app / "App.lean").write_text(original)
                 wait_for(lambda: b"Hello, LeanWeave!" in response(port)[1], "recovery build did not restart")
+            except BaseException:
+                print(log_path.read_text(errors="replace"), file=sys.stderr)
+                raise
             finally:
                 if os.name == "posix":
                     os.killpg(watcher.pid, signal.SIGTERM)
