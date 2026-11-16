@@ -37,15 +37,19 @@ private def deferredOrder : IO Unit := do
   check ((← starts.get).isEmpty) "zero credit does not execute producer"
   check (← body.poll 5).isNone "actual AppM await suspends"
   check ((← starts.get) == #[(0,5)] && (← polls.get) == 1) "one deferred operation"
-  check (← body.poll 0).isNone "zero credit does not advance a pending operation"
-  check ((← polls.get) == 1) "pending operation not polled without credit"
+  check (← body.poll 0).isNone "zero credit completes pending operation without emitting data"
+  check ((← polls.get) == 2 && (← starts.get).size == 1) "admitted operation advances into one retained chunk"
+  check (← body.poll 0).isNone "retained chunk cannot emit without credit"
+  check ((← polls.get) == 2 && (← starts.get).size == 1) "zero credit neither recomputes chunk nor starts another step"
   check ((← data (← body.poll 1)) == "a".toUTF8) "smaller completion credit splits result"
   check ((← data (← body.poll 1)) == "b".toUTF8 && (← data (← body.poll 1)) == "c".toUTF8) "retained chunk drains in order"
   check ((← starts.get).size == 1) "no eager next state while chunk remains"
+  check (← body.poll 0).isNone "zero credit after chunk drain cannot admit next step"
+  check ((← starts.get).size == 1) "next-step admission still requires credit"
   check (← body.poll 2).isNone "next state awaits independently"
   check ((← data (← body.poll 2)) == "de".toUTF8) "state transition order"
   check (← body.poll 4).isNone "terminal transition awaits"
-  let terminal ← body.poll 4
+  let terminal ← body.poll 0
   check (match terminal with | some (.finish fields) => header? fields "x-end" == some "yes" | _ => false) "terminal trailers preserved"
   check (match ← body.poll 0 with | some (.finish _) => true | _ => false) "known terminal completion needs no DATA credit"
   check ((← starts.get) == #[(0,5),(1,2),(2,4)] && (← cancellations.get) == 0) "exactly one execution per ordered transition"
@@ -113,17 +117,23 @@ private def deadline : IO Unit := do
     return .finish #[]) (fun _ => 0) {stepTimeoutMs := 100} (fun reason => closed.modify (·.push reason))
   let _ ← body.poll 1
   IO.sleep 150
-  check (← failed (body.poll 1)) "whole step timeout is terminal"
+  check (← failed (body.poll 0)) "whole step timeout remains terminal with stalled output credit"
   body.close (some .failed)
   check ((← cancelled.get) == #[.timeout] && (← closed.get) == #[some .timeout]) "step timeout cancels producer exactly once"
   let awaitClosed ← IO.mkRef (#[] : Array (Option Stream.CancelReason))
+  let awaitCancelled ← IO.mkRef (#[] : Array Stream.CancelReason)
+  let lateResult ← IO.mkRef (none : Option (Except AppError Unit))
+  let continued ← IO.mkRef (0 : Nat)
   let awaiting ← Stream.unfoldM () (fun _ _ => do
-    let _ ← AppM.await (α := Unit) (pure none) (fun _ => pure ()) 1
-    return .finish #[]) (fun _ => 0) {} (fun reason => awaitClosed.modify (·.push reason))
-  let _ ← try awaiting.poll 1 catch _ => pure none
-  IO.sleep 5
-  let _ ← try awaiting.poll 1 catch _ => pure none
-  check ((← awaitClosed.get) == #[some .timeout]) "AppM await deadline propagated"
+    let _ ← AppM.await lateResult.get (fun reason => awaitCancelled.modify (·.push reason)) 100
+    continued.modify (· + 1)
+    return .next "late".toUTF8 ()) (fun _ => 0) {} (fun reason => awaitClosed.modify (·.push reason))
+  check (← awaiting.poll 4).isNone "short await initially admitted under positive credit"
+  IO.sleep 150
+  check (← failed (awaiting.poll 0)) "short await timeout driven despite zero output credit"
+  check ((← awaitClosed.get) == #[some .timeout] && (← awaitCancelled.get) == #[.timeout]) "AppM await deadline/cancellation propagated at zero credit"
+  lateResult.set (some (.ok ()))
+  check ((← awaiting.poll 4).isNone && (← continued.get) == 0) "late result never runs a timed-out continuation or emits data"
 
 private def multipartBounds : IO Unit := do
   let polls ← IO.mkRef (0 : Nat)

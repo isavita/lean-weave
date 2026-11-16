@@ -40,9 +40,11 @@ private structure GeneratorState (State : Type) where
 
 /-- A typed cooperative generator, constructed on its eventual reactor owner.
 The conservative `stateBytes` measurement must include all state retained by the
-step closure. No step starts or advances without positive output credit, and
-there is at most one AppM execution. Deferred results are split if later credit
-shrinks. Native HEAD suppression closes without ever starting a step.
+step closure. No step starts without positive output credit, and there is at
+most one AppM execution. An already-admitted operation advances and enforces
+deadlines even at zero credit; its one completed chunk stays bounded and waits
+for credit. Deferred results split if later credit shrinks. Native HEAD
+suppression closes without ever starting a step.
 
 All callbacks stay on the owner and must be nonblocking. The terminal event is
 sticky until native close; cleanup runs exactly once on admission, cancellation,
@@ -82,9 +84,9 @@ def unfoldM (initial : State) (step : State → Nat → AppM (Step State))
           let mut current ← state.get
           if current.closed then return none
           if let some trailers := current.trailers then return some (.finish trailers)
-          if budget == 0 then return none
           if current.pending.isEmpty then
             if current.operation.isNone then
+              if budget == 0 then return none
               let some value := current.value | throw (IO.userError "stream generator lost owner state")
               let credit := min budget config.maxChunkBytes
               let startedMs ← IO.monoMsNow
@@ -121,6 +123,7 @@ def unfoldM (initial : State) (step : State → Nat → AppM (Step State))
                   throw (IO.userError "stream generator trailer bounds/declaration invalid")
               state.set { current with trailers := some trailers }
               return some (.finish trailers)
+          if budget == 0 then return none
           let count := min budget current.pending.size
           let bytes := current.pending.extract 0 count
           state.set { current with pending := current.pending.extract count current.pending.size }
