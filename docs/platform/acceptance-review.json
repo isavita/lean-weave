@@ -50,8 +50,8 @@
     {
       "id": "A07",
       "finding": "Unknown-length streamed HEAD advertised Content-Length:0 despite nonempty GET",
-      "status": "closed_native_local_proof_final_tls_matrix_pending",
-      "resolution": "lean-net dcce82480a6985b3269a474b12b81863e6bdb115 omits unknown length metadata, preserves known11/bodyless statuses and closes producer once; all15stream + encoder/connection + focused headers passed."
+      "status": "closed_native_local_and_crossplatform_ci",
+      "resolution": "lean-net dcce82480a6985b3269a474b12b81863e6bdb115 omits unknown length metadata, preserves known11/bodyless statuses and closes producer once; all15stream + encoder/connection + focused headers passed. Final immutable TLS matrix43897188644 is green on Ubuntu/macOS/Windows."
     },
     {
       "id": "A08",
@@ -119,10 +119,11 @@
     "previous_result": "Ubuntu passed; Windows failed a fixed35ms tick-count assumption; macOS never acquired a hosted arm64 runner (explicit capacity annotation), not a code failure.",
     "timer_fix": "a20e55846414880b25f562252bb6313439e560f7",
     "timer_fix_tls_run": 43895154756,
-    "timer_fix_result_at_last_poll": "Ubuntu/macOS passed; Windows progressed past previous failure to final static/observability steps.",
+    "timer_fix_result_at_last_poll": "All3 native TLS jobs (Ubuntu/macOS/Windows) completed success.",
     "final_pin": "dcce82480a6985b3269a474b12b81863e6bdb115",
     "final_tls_run": 43897188644,
-    "final_tls_result": "in_progress; must be tracked separately, not inferred from a20."
+    "final_tls_result": "All3 native TLS jobs (Ubuntu/macOS/Windows) completed success, including all15stream wire cases and the full subsequent TLS/static/metrics corpus.",
+    "final_tls_url": "https://github.com/isavita/lean-net/actions/runs/43897188644"
   },
   "items": [
     {
@@ -187,7 +188,7 @@
       "id": "P04",
       "feature": "Streaming & Multipart Responses",
       "requirement": "Native support for `Transfer-Encoding: chunked` (already in lean-net) exposed via an async generator/stream API for LLM token streaming or large file exports.",
-      "assessment": "native_contracts_present_final_matrix_pending",
+      "assessment": "native_contracts_supported_framework_matrix_pending",
       "implementation": [
         "LeanWeave/Core/Stream.lean",
         "LeanWeave/Stream.lean",
@@ -199,7 +200,7 @@
         "test/test_realtime.py",
         "lean-net:test/test_application_streams.py"
       ],
-      "scope_and_limits": "Owned cooperative polls, exact output credit and multipart producers are implemented. Native latest fix preserves unknown HEAD length omission, known length and bodyless statuses; all15 stream wires passed locally. The final pinned TLS matrix remains a separate acceptance gate.",
+      "scope_and_limits": "Owned cooperative polls, exact output credit and multipart producers are implemented. Native latest fix preserves unknown HEAD length omission, known length and bodyless statuses; all15 stream wires passed locally. The final pinned TLS matrix43897188644 now passes on Ubuntu/macOS/Windows; separate framework matrix/browser execution remains pending.",
       "platforms": "Local evidence identifies macOS arm64; configured platform CI is not proof until its immutable run passes. Real-service platform jobs are Linux; Windows wire/native checks do not imply real PostgreSQL/Redis service execution."
     },
     {
@@ -671,5 +672,6 @@
       "scope_and_limits": "weave_api drives actual routing, checked handler types/codecs and OpenAPI3.1.1 JSON from one declaration; missing metadata/collisions are rejected. Native live spec endpoint is tested. Swagger UI scaffolding uses supplied hosted assets; complete arbitrary Lean type reflection or a bundled Swagger distribution is not claimed.",
       "platforms": "Local evidence identifies macOS arm64; configured platform CI is not proof until its immutable run passes. Real-service platform jobs are Linux; Windows wire/native checks do not imply real PostgreSQL/Redis service execution."
     }
-  ]
+  ],
+  "native_ci_checked_at_utc": "2026-11-16T15:45:00.112528+00:00"
 }
