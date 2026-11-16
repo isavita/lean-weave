@@ -32,14 +32,20 @@ def free_port():
         return sock.getsockname()[1]
 
 
-def wait(condition, message, timeout=6):
+def wait(condition, message, timeout=6, diagnostics=None):
     cutoff = time.monotonic() + timeout
+    last_error = None
     while time.monotonic() < cutoff:
         try:
             if condition(): return
-        except (OSError, http.client.HTTPException): pass
+        except (OSError, http.client.HTTPException) as error:
+            last_error = repr(error)
         time.sleep(.01)
-    raise AssertionError(message)
+    detail = {'last_transport_error': last_error}
+    if diagnostics is not None:
+        try: detail.update(diagnostics())
+        except Exception as error: detail['diagnostics_error'] = repr(error)
+    raise AssertionError(message + ': ' + json.dumps(detail, sort_keys=True))
 
 
 def main():
@@ -58,6 +64,7 @@ def main():
         paused = []
         peer = None
         next_stream = 1
+        observed_http1 = {}
         def live_process():
             if process.poll() is not None:
                 log.seek(0)
@@ -68,7 +75,12 @@ def main():
             try:
                 connection.request(method, '/health/' + probe)
                 response = connection.getresponse()
-                return response.status, {key.lower(): value for key, value in response.getheaders()}, response.read()
+                headers = {key.lower(): value for key, value in response.getheaders()}
+                body = response.read()
+                observed_http1.setdefault(probe, {})[headers.get('x-health-owner', 'unknown')] = {
+                    'status': response.status, 'pending': headers.get('x-health-probe-pending'),
+                    'body': body.decode('utf-8', errors='replace')}
+                return response.status, headers, body
             finally: connection.close()
         def http2(probe, method=b'GET'):
             nonlocal next_stream
@@ -83,8 +95,40 @@ def main():
             if method == b'HEAD':
                 assert not any(frame.kind == 0 and frame.stream == stream for frame in peer.frames), 'HEAD emitted DATA'
             return int(headers[b':status']), headers, bytes(body)
-        def backends():
-            return int(pg.sql(f"SELECT count(*) FROM pg_stat_activity WHERE usename='{role}';").strip())
+        def backends(authenticated=False):
+            # Failed authentication can briefly expose a role with NULL state.
+            # A non-NULL state requires an authenticated backend. Shutdown still
+            # requires every backend, including authentication attempts, to exit.
+            state = ' AND state IS NOT NULL' if authenticated else ''
+            return int(pg.sql(f"SELECT count(*) FROM pg_stat_activity WHERE usename='{role}'{state};").strip())
+        def diagnostics():
+            result = {'process_returncode': process.poll(), 'http1_by_owner': observed_http1}
+            if paused:
+                result['postgres'] = 'backend processes paused; SQL deferred until resume'
+            else:
+                result['postgres'] = json.loads(pg.sql(f"""
+                    SELECT json_build_object(
+                      'can_login', (SELECT rolcanlogin FROM pg_roles WHERE rolname='{role}'),
+                      'backends', (SELECT COALESCE(json_agg(json_build_object(
+                        'pid', pid, 'state', state, 'wait_event_type', wait_event_type,
+                        'wait_event', wait_event, 'query', query)), '[]'::json)
+                        FROM pg_stat_activity WHERE usename='{role}'));
+                    """))
+            log.flush()
+            if hasattr(os, 'pread'):
+                size = os.fstat(log.fileno()).st_size
+                result['native_log_tail'] = os.pread(log.fileno(), min(size, 8192), max(0, size - 8192)).decode('utf-8', errors='replace')
+            return result
+        def wait_phase(condition, message, timeout=6):
+            wait(condition, message, timeout, diagnostics)
+        def assert_new_tls_login_denied():
+            denied = subprocess.run([str(pg.binary_dir / 'psql'), '-X', '-w', '-h', 'localhost', '-p', str(pg.port),
+                '-U', role, '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', '-At', '-c', 'SELECT 1'],
+                env=dict(os.environ, PGHOSTADDR='127.0.0.1', PGSSLMODE='verify-full',
+                    PGSSLROOTCERT=str(pg.directory / 'data/server.crt'), PGCONNECT_TIMEOUT='2',
+                    PGAPPNAME='weave-health-revocation-check'), capture_output=True, text=True, timeout=3)
+            assert denied.returncode != 0 and 'not permitted to log in' in denied.stderr, (
+                'fresh TLS login was not rejected after committed NOLOGIN', denied.returncode, denied.stdout, denied.stderr)
         def assert_phase(expected):
             for probe, expected_status in expected.items():
                 status, headers, body = http1(probe)
@@ -102,8 +146,11 @@ def main():
                     assert head2[field] == headers2[field]
                 assert int(head2[b'content-length']) == len(body)
         def all_http1(probe, expected):
-            # Fresh connections traverse both reactor owners.
-            return all(http1(probe)[0] == expected for _ in range(4))
+            # Require fresh snapshots from both owners, rather than relying on
+            # how a particular platform balances this connection sample.
+            samples = [http1(probe) for _ in range(4)]
+            return {headers['x-health-owner'] for _, headers, _ in samples} == {'0', '1'} and all(
+                status == expected for status, _, _ in samples)
         def stop():
             if process.poll() is None:
                 process.send_signal(signal.CTRL_BREAK_EVENT if os.name == 'nt' else signal.SIGTERM)
@@ -111,23 +158,30 @@ def main():
             except subprocess.TimeoutExpired:
                 process.kill(); process.wait(); raise AssertionError('native health shutdown exceeded external test deadline')
         try:
-            wait(lambda: http1('live')[0] == 200, 'native health listener startup deadline')
+            wait_phase(lambda: http1('live')[0] == 200, 'native health listener startup deadline')
             peer = H2Client(port)
             assert_phase({'live': 200, 'startup': 503, 'ready': 503})
-            assert backends() == 0
+            assert backends(authenticated=True) == 0
             pg.sql(f'ALTER ROLE {role} LOGIN;')
-            wait(lambda: all_http1('ready', 200) and backends() == 2, 'both owner TLS probes failed to initialize')
+            wait_phase(lambda: all_http1('ready', 200) and backends(authenticated=True) == 2, 'both owner TLS probes failed to initialize')
             assert_phase({'live': 200, 'startup': 200, 'ready': 200})
             owners = {http1('live')[1]['x-health-owner'] for _ in range(6)}
             assert owners == {'0', '1'}, owners
             tls = int(pg.sql(f"SELECT count(*) FROM pg_stat_ssl s JOIN pg_stat_activity a USING(pid) WHERE a.usename='{role}' AND s.ssl;").strip())
             assert tls == 2, 'pool dependencies were not real TLS connections'
             assert pg.sql(f"SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname='{role}';").strip() == 'f'
-            pg.sql(f"ALTER ROLE {role} NOLOGIN; SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE usename='{role}';")
-            wait(lambda: all_http1('ready', 503) and backends() == 0, 'revoked/terminated dependency remained ready')
+            # One psql -c containing both statements runs in one transaction:
+            # termination could let a replacement authenticate before NOLOGIN
+            # commits. Establish the committed denial before touching the pools.
+            pg.sql(f'ALTER ROLE {role} NOLOGIN;')
+            assert pg.sql(f"SELECT rolcanlogin FROM pg_roles WHERE rolname='{role}';").strip() == 'f'
+            assert_new_tls_login_denied()
+            terminated = pg.sql(f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE usename='{role}' AND state IS NOT NULL;").split()
+            assert terminated == ['t', 't'], ('expected both authenticated owner backends', terminated, diagnostics())
+            wait_phase(lambda: all_http1('ready', 503) and backends(authenticated=True) == 0, 'revoked/terminated dependency remained ready')
             assert_phase({'live': 200, 'startup': 200, 'ready': 503})
             pg.sql(f'ALTER ROLE {role} LOGIN;')
-            wait(lambda: all_http1('ready', 200) and backends() == 2, 'dependency readiness did not recover')
+            wait_phase(lambda: all_http1('ready', 200) and backends(authenticated=True) == 2, 'dependency readiness did not recover')
             assert_phase({'live': 200, 'startup': 200, 'ready': 200})
             # Pause only disposable app backends; no admin query runs until they
             # are resumed. This makes both SELECT 1 executions genuinely pending.
@@ -141,13 +195,13 @@ def main():
                     assert status == 200
                     if headers['x-health-probe-pending'] == '1': pending_owners.add(headers['x-health-owner'])
                     return pending_owners == {'0', '1'}
-                wait(pending, 'owner probe executions did not become pending', timeout=.7)
+                wait_phase(pending, 'owner probe executions did not become pending', timeout=.7)
                 assert all_http1('startup', 200), 'startup regressed while a probe was pending'
             started = time.monotonic()
             process.send_signal(signal.CTRL_BREAK_EVENT if os.name == 'nt' else signal.SIGTERM)
             for pid in paused: os.kill(pid, signal.SIGCONT)
             paused = []
-            wait(lambda: backends() == 0, 'pool backends survived graceful drain', timeout=3)
+            wait_phase(lambda: backends() == 0, 'pool backends survived graceful drain', timeout=3)
             assert process.poll() is None, 'DB closure was only observed after process exit'
             process.wait(5)
             elapsed = time.monotonic() - started
@@ -160,6 +214,8 @@ def main():
                 'initial_live': 200, 'initial_startup': 503, 'initial_ready': 503,
                 'all_three_probes_http1_http2': True, 'head_get_metadata_and_no_body_data': True,
                 'revoke_login_and_terminate_backend_ready': 503, 'outage_live': 200, 'outage_startup': 200,
+                'login_revocation_committed_before_termination': True, 'fresh_tls_login_denied_before_termination': True,
+                'authenticated_backends_during_outage': 0,
                 'restored_login_recovers_ready': 200, 'startup_monotone_after_success': True,
                 'pending_probe_owners_cancelled': sorted(pending_owners), 'pools_closed_before_process_exit': True,
                 'backend_count_after_exit': 0, 'shutdown_signal': 'CTRL_BREAK_EVENT' if os.name == 'nt' else 'SIGTERM',
