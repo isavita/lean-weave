@@ -21,6 +21,12 @@ private def rejectedStartup (config : Http.Config) : IO Bool := do
   catch _ => return true
 
 def main : IO Unit := do
+  check ((Http.decodeOtlpResponse 200 "{}".toUTF8).accepted) "OTLP empty object"
+  check ((Http.decodeOtlpResponse 200 "{\"partialSuccess\":{\"rejectedSpans\":\"1\"}}".toUTF8).rejected == 1) "OTLP partial success int64"
+  for bad in ["null", "[]", "{\"partialSuccess\":true}", "{\"partialSuccess\":{\"rejectedSpans\":1e1000000000}}",
+      "{\"partialSuccess\":{\"rejectedSpans\":\"9223372036854775808\"}}",
+      "{\"partialSuccess\":{\"rejectedSpans\":\"" ++ String.ofList (List.replicate 50000 '9') ++ "\"}}"] do
+    check (!(Http.decodeOtlpResponse 200 bad.toUTF8).accepted) "unbounded/malformed OTLP response accepted"
   let port := ((← IO.getEnv "WEAVE_HTTP_PORT").bind String.toNat?).getD 0
   let ca := (← IO.getEnv "WEAVE_HTTP_CA").getD ""
   let secure := (← IO.getEnv "WEAVE_HTTP_TLS") == some "1"

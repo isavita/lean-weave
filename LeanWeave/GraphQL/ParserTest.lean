@@ -53,6 +53,11 @@ def run : IO Unit := do
     ("{f(a:\"unterminated)}", "unterminated"), ("{f", "end"), ("{ ...on }", "name"),
     ("type User {id:ID}", "expected GraphQL operation"), ("\"desc\" {f}", "shorthand")
   ] do expectError query error
+  expectError "{f(a:1e1000000000)}" "exponent"
+  expectError "{f(a:1e-1000000000)}" "exponent"
+  expectError ("{f(a:" ++ String.ofList (List.replicate 513 '9') ++ ")}") "token length limit"
+  let _ ← accepted "{f(a:5e-324)}"
+  check ((← firstArgument "{f(a:\"1e1000000000\")}") == .literal (.str "1e1000000000")) "numeric-looking strings stay strings"
   expectError "{f}" "byte limit" {maxBytes := 2}
   expectError "{f}" "token limit" {maxTokens := 2}
   expectError "{f{g{h}}}" "depth limit" {maxDepth := 2}

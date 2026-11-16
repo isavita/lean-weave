@@ -77,6 +77,8 @@ private def cacheIsolation : IO Unit := do
   let store ← Cache.Store.new
   let ctx ← require LeanWeave.Test.context
   let ctx := { ctx with host := "example.test", tenant := "alpha", routeName := "dashboard", attributes := #[("tenant.config.revision", "1"),("feature.variant", "a")] }
+  check (Cache.responseKey { ctx with request := { ctx.request with target := "/dashboard?q=a+b".toUTF8 } } {} !=
+    Cache.responseKey { ctx with request := { ctx.request with target := "/dashboard?q=a%2Bb".toUTF8 } } {}) "raw target avoids protocol-specific query decoding collisions"
   let calls ← IO.mkRef 0
   let handler := Cache.middleware store {} fun _ => do
     calls.modify (· + 1)
@@ -115,6 +117,10 @@ private def cspCacheIsolation : IO Unit := do
   let first ← require (← (handler ctx).run)
   let second ← require (← (handler ctx).run)
   check (first.body != second.body && (← store.state.get).entries.isEmpty) "nonce-sensitive request fragments bypass caching"
+  let raw : Response := { headers := #[
+    { name := "cache-control", value := "public".toUTF8 },
+    { name := "content-security-policy", value := "script-src 'nonce-abc'".toUTF8.push 255 }] }
+  check (!(Cache.eligibleResponse {} raw)) "non-UTF8 raw CSP fails closed for cache storage"
   check (!(Cache.eligibleResponse {} ((Response.text "x").withHeader "cache-control" "public" |>.withHeader "content-security-policy-report-only" "script-src 'nonce-abc'"))) "report-only nonce responses bypass storage"
 
 private def logging : IO Unit := do

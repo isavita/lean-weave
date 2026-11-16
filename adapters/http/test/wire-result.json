@@ -58,9 +58,9 @@
   "platform": "macOS-27.2.1-arm64-arm-64bit-Mach-O",
   "independent_h2": "4.4.1",
   "sources_sha256": {
-    "test/Main.lean": "c5b4dfd6f06f0f2e09728e05c47b6b493ac9dfb69c36dc0b1ec681d07666e317",
+    "test/Main.lean": "6d08561c727f28c481f0de10d172d43757300ad29734ff050801fcb9286036dc",
     "test/wire.py": "bdbb35d272a4174ae8203950667913ad082dfb432d83a0e51319ce8f7c8bf3db",
-    "LeanWeaveHttp/Client.lean": "e506c47f9c20f220dd40c019278ad87899447c7b42a405da080b13bd8f0551ed",
+    "LeanWeaveHttp/Client.lean": "97dd2b866dca2fab7991e606d74c4faf0e31d50f0be033d0e0c69e8eb83af30b",
     "c/http.c": "7c60c6368b62c206501074228bdec240fc66c8ca7ab83d094854e8f5921af379"
   }
 }

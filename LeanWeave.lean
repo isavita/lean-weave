@@ -26,3 +26,4 @@ import LeanWeave.OpenApi
 import LeanWeave.Protobuf
 import LeanWeave.Grpc
 import LeanWeave.Plugin
+import LeanWeave.GraphQL

@@ -1,4 +1,5 @@
 import Lean.Data.Json
+import LeanWeave.Core.Body
 
 namespace LeanWeave.GraphQL
 
@@ -279,7 +280,7 @@ private partial def value (fuel : Nat) (constant : Bool := false) : Parser Value
   match token.kind with
   | .string => return .literal (.str token.text)
   | .number =>
-    let number ← Lean.Json.parse token.text
+    let number ← (LeanWeave.Body.json token.text.toUTF8 { maxBytes := 4096, maxDepth := 1, maxFields := 1 }).mapError LeanWeave.AppError.message
     if token.text.contains '.' || token.text.contains 'e' || token.text.contains 'E' then
       let .num number := number | throw "invalid GraphQL numeric literal"
       return .floatValue number

@@ -18,6 +18,15 @@ keys need at least 32 bytes. Issuer, audience, lifetime and clock bounds are
 mandatory verification inputs. JWT objects reject duplicate top-level keys,
 including escaped spellings, before JSON canonicalization.
 
+JSON decoders preflight numeric literals before Lean's arbitrary-precision
+parser. Defaults bound mantissas and canonical decimal forms to 512 digits and
+explicit/effective denominator exponents to 1024; configurable limits cannot
+exceed 4096. This includes finite IEEE754 boundary values while rejecting tiny
+inputs such as `1e1000000000` before expansion. Accepted numbers survive bounded
+render/parse round trips; numeric zero is normalized before rendering. The same
+guard applies to JWT, audit replay, stored jobs/workflows, plugin headers,
+GraphQL numeric literals and OTLP responses. Numeric-looking strings stay strings.
+
 `Tenant.Store.set` replaces a validated snapshot and advances its revision.
 Compose `Tenant.configured`, `Tenant.RateLimiter.middleware` and
 `Feature.middleware` once. Configuration changes affect subsequent requests.
@@ -47,7 +56,9 @@ configuration propagation is an application responsibility; no distributed flag
 configuration backend or deployment-wide instantaneous delivery is implied.
 
 Local and Redis response/fragment cache keys include tenant configuration
-revision, a canonical configuration fingerprint and feature variant/version digest.
+revision, a canonical configuration fingerprint, the original raw request target
+and feature variant/version digest. Keeping raw bytes alongside decoded route/query
+dimensions avoids collisions for protocols with different query-form conventions.
 The fingerprint prevents stale reuse after a process restart; a monotone revision
 watermark prevents remove/recreate reuse within a store. `tenant.cache.enabled=false` or
 TTL zero bypasses reads and writes; tenant TTL can tighten a route's maximum.
@@ -98,8 +109,8 @@ Never share one owner-local tracer/logger among independent job threads.
 SQL text/parameters, request bodies and credentials are not exported.
 
 `Observability.Exporter` retains one bounded batch and one cooperative operation.
-The optional HTTP adapter provides `Http.otlpTransport`. Create its client without
-a tracer to avoid recursive exporter spans. Pulses run from `onTick`; the
+The optional HTTP adapter provides `Http.otlpTransport`. Exporter calls suppress client instrumentation to avoid recursive spans,
+even when a caller supplies an instrumented HTTP client. Pulses run from `onTick`; the
 participant drains within the runtime's absolute cutoff. Retryable failures use
 bounded backoff/attempts. Retries are at-least-once and can duplicate accepted
 spans after an ambiguous network failure. OTLP partial success is terminal.
@@ -143,6 +154,10 @@ numeric connection addresses. `hostName` supplies the TLS/SNI identity while
 `hostAddr` supplies a startup-resolved numeric IP. Requests do not follow
 redirects, consult proxy environment variables or perform DNS on the reactor.
 Request/response/header sizes, active operations and timeouts are bounded.
+Set `Server.Config.appRetainedBytes` to at least `Http.Config.retainedBytes`
+when awaiting these operations; the default generic handler reservation is smaller
+than the default HTTP adapter reservation. Keep the worker deferred byte budget
+large enough for the configured number of concurrent reservations.
 
 For strict reactor TLS, supply a PEM `caBundle`: the client preloads bounded CA
 bytes at startup and each transfer uses an in-memory CA blob. Use a curl TLS

@@ -26,8 +26,11 @@ def eligibleRequest (ctx : Context) : Bool :=
 def eligibleResponse (policy : Policy) (response : Response) : Bool :=
   let cc := values response.headers "cache-control"
   let vary := tokens (values response.headers "vary")
-  let noncePolicy := ["content-security-policy", "content-security-policy-report-only"].any fun name =>
-    ((values response.headers name).toLower.splitOn "nonce-").length > 1
+  let noncePolicy := response.headers.any fun header =>
+    if !["content-security-policy", "content-security-policy-report-only"].contains header.name.toLower then false
+    else match String.fromUTF8? header.value with
+      | none => true
+      | some value => (value.toLower.splitOn "nonce-").length > 1
   !noncePolicy && response.stream.isNone && response.status == 200 && directive cc "public" && !directive cc "private" &&
     !directive cc "no-store" && !directive cc "no-cache" &&
     !(response.headers.any (fun h => h.name.toLower == "set-cookie")) && !vary.contains "*" &&
@@ -38,7 +41,8 @@ private def rawHeaderKey (ctx : Context) (name : String) : String :=
   key (headers.map fun h => key (h.value.data.map (fun b => toString b.toNat)))
 
 def responseKey (ctx : Context) (policy : Policy) : String :=
-  key (#["response", policy.version, ctx.host, ctx.tenant, ctx.routeName,
+  key (#["response:v2", policy.version, ctx.host, ctx.tenant, ctx.routeName,
+    String.fromUTF8! ctx.request.target,
     key ctx.path, key (ctx.query.map fun (k,v) => key #[k,v]), ctx.locale,
     (ctx.attribute "tenant.config.revision").getD "", (ctx.attribute "tenant.config.variant").getD "",
     (ctx.attribute "feature.variant").getD ""] ++

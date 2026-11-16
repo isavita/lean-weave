@@ -95,6 +95,10 @@ def Client.create (config : Config) (tracer : Option Observability.Tracer := non
     else pure ByteArray.empty
   return { config, tracer, caBlob, active := ← IO.mkRef #[], nextId := ← IO.mkRef 0, closed := ← IO.mkRef false }
 
+/-- Share the owner's bounded connections while suppressing instrumentation for
+exporter/control-plane calls, avoiding recursive telemetry. -/
+def Client.withoutTracing (client : Client) : Client := { client with tracer := none }
+
 def Client.close (client : Client) : IO Unit := do
   client.closed.set true
   for active in ← client.active.get do Native.close active.native

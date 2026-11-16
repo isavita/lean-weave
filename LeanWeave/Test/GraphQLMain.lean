@@ -42,6 +42,7 @@ def main : IO Unit := do
     "subscription{ticks @skip(if:true){value}}",
     "query($unused:Int){counter{value}}", "{counter{value}} fragment Unused on Counter {value}",
     "{color(color:\"RED\")}", "mutation($n:Int! = 1.0){increment(amount:$n){value}}",
+    "mutation {increment(amount:1e1000000000){value}}",
     "{ unknown }", "{ counter { missing } }", "{ counter }", "{ echo }", "{ echo(nope:1) }",
     "mutation { increment(amount:1.0){value} }", "mutation { increment(amount:2147483648){value} }",
     "mutation { increment(amount:101){value} }", "mutation { increment(amount:$missing){value} }",

@@ -23,7 +23,7 @@
   "pools_closed_before_process_exit": true,
   "backend_count_after_exit": 0,
   "shutdown_signal": "SIGTERM",
-  "observed_shutdown_seconds": 0.451388,
+  "observed_shutdown_seconds": 0.456301,
   "native_shutdown_budget_ms": 1000,
   "hard_filesystem_deadline_claimed": false,
   "persistent_service_started": false,
@@ -40,5 +40,5 @@
     "integration/platform/lake-manifest.json": "849fe4857e1190285246e2f99fec37d02bdead859af4da926da7df4b839efa30",
     "lake-manifest.json": "d3080ee9a6cb2ec0ecfc6a040ae9355cd3b4a0523676edca888acc9d3d614fed"
   },
-  "fixture_sha256": "2d9de7dc8cce85c1f71881375efa0e750e7af9cb3a1d96699317d49934dee5ee"
+  "fixture_sha256": "a916b65f3d903451d41f89e3cb7d28349c7df87a98d110507c968d895d40b4ab"
 }

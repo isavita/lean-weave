@@ -122,6 +122,7 @@ Mail can be supplied by an application adapter.
 - [Realtime](LeanWeave/Realtime/README.md): bounded channels, local/Redis PubSub, causal CRDT presence, replaying SSE, typed Live components and WebSocket/SSE transport.
 - [Jobs and workflows](docs/platform/jobs-workflows.md): typed payloads, dedicated owner workers, retry/dead letters, cron timers, durable PostgreSQL outbox and compensating workflows.
 - [Tenancy and operations](docs/platform/operations.md): verified tenant resolution, typed SQL/RLS scopes, dynamic tenant settings, sticky flags and audited mutations, tracing/OTLP, sampled logs, probes, drain, rotating Vault secrets and typed CSP/authorization policies.
+- [GraphQL](LeanWeave/GraphQL/README.md): typed executable queries/mutations, introspection and bounded `graphql-transport-ws` subscriptions.
 - [Protocols and API documentation](docs/platform/protocols.md): checked schemas, generated OpenAPI/Swagger, native protobuf and gRPC/gRPC-Web unary/streaming methods.
 - [Native plugins](adapters/plugins/README.md): versioned C ABI, per-generation request/stream leases and development reload without restarting the listener.
 

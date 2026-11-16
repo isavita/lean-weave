@@ -59,6 +59,8 @@ jobs:
           test -s docs/.lake/build/doc/LeanWeave/Observability/Trace.html
           test -s docs/.lake/build/doc/LeanWeave/Plugin/Manager.html
           test -s docs/.lake/build/doc/LeanWeave/Grpc/Service.html
+          test -s docs/.lake/build/doc/LeanWeave/GraphQL/Execution.html
+          test -s docs/.lake/build/doc/LeanWeave/GraphQL/WebSocket.html
           test -s docs/.lake/build/doc/LeanWeavePostgres/Workflows.html
           test -s docs/.lake/build/doc/LeanWeaveHttp/Vault.html
           test -s docs/.lake/build/doc/LeanWeavePlugins.html

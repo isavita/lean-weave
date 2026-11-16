@@ -1,4 +1,5 @@
 import LeanWeave.Security.Crypto
+import LeanWeave.Core.Body
 
 open LeanWeave.Security
 
@@ -9,7 +10,7 @@ def main : IO Unit := do
     let line ← input.getLine
     if line.isEmpty then break
     let result : Except String Lean.Json := do
-      let json ← Lean.Json.parse line
+      let json ← (LeanWeave.Body.json line.toUTF8 { maxBytes := 4 * 1024 * 1024, maxDepth := 4, maxFields := 16 }).mapError LeanWeave.AppError.message
       let message : String ← json.getObjValAs? _ "message"
       let key : String ← json.getObjValAs? _ "key"
       let bytes ← Crypto.unbase64url message (2 * 1024 * 1024)

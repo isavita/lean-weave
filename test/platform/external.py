@@ -83,5 +83,13 @@ service:
         'parent_contexts':len(set(parent_ids)),'automatic_real_postgres_queries':2,'automatic_real_http_calls':2,'actual_job_execution':True,
         'no_sql_parameters_exported':True,'no_persistent_service':True}
     print(output.stdout.strip())
+reports['source_sha256']={name:hashlib.sha256((root/name).read_bytes()).hexdigest() for name in [
+    'test/platform/external.py','integration/platform/Main.lean','integration/platform/lake-manifest.json',
+    'LeanWeave/Core/AppM.lean','LeanWeave/Core/Body.lean','LeanWeave/Observability/Trace.lean',
+    'LeanWeave/Observability/Export.lean','LeanWeave/Observability/Jobs.lean',
+    'LeanWeave/Secrets/Manager.lean','adapters/postgres/LeanWeavePostgres/Pool.lean',
+    'adapters/http/LeanWeaveHttp/Client.lean','adapters/http/LeanWeaveHttp/Otlp.lean',
+    'adapters/http/LeanWeaveHttp/Vault.lean','adapters/http/c/http.c']}
+reports['fixture_sha256']=hashlib.sha256(binary.read_bytes()).hexdigest()
 (root/'docs/platform/external-result.json').write_text(json.dumps(reports,indent=2)+'\n')
 print(json.dumps(reports))
