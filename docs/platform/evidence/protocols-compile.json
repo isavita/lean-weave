@@ -22,7 +22,7 @@
     "typed API ambiguous routes",
     "typed API wrong input handler"
   ],
-  "sourceCommit": "0cf534071d6b2ac6b4965863c02a42607d1a90dc",
+  "sourceCommit": "7c819d73dbece4f3570c1ecf8f520e70b06cb5f5",
   "sourceDirty": true,
   "source_sha256": {
     "LeanWeave/Core/AppM.lean": "b431767c9eadaefcbd5f02e0cc06a6c370fcdabb07a04d889fbc0cd4cbfca801",
@@ -62,11 +62,11 @@
     "scripts/protocol-browser/package-lock.json": "af06ec92b32c433b56a04261ee5897cb8e1424d9af1d956b933cbeb44e1b1f32",
     "scripts/protocol-browser/package.json": "40cb27fdddc80d6ef3397b52b02ffae95562027572b5192b53b326d682a6c71e",
     "scripts/protocol_evidence.py": "b7e340a857b5634318f01c06f4aa713413ccba000cdbf20ed940ae878d0176b6",
-    "scripts/test_grpc_web_browser.py": "7f6d3c3f48333d351a139c57a0dc50e7ca9c1db9f285e4abc122bc2e92c07caf",
+    "scripts/test_grpc_web_browser.py": "b6f06ee7d6c5eaaeccf6e0010259894fde255877709fdfd4d86c486d42bee180",
     "scripts/test_protocol_compile.py": "9ddcf54ffc7acf83d9896656f289ce02cd73280a1e37c2549391eac1d7de7f2c",
-    "scripts/test_protocols.py": "9da7cf99ed816025b7e293e368e2e39d84b45173340d98ac1b17d7e672a158bf"
+    "scripts/test_protocols.py": "b5e7728c4a93278a1a49b9b65a6ca8198dd4facbd4c5ca89987dc39c63e255b8"
   },
   "lean_net_revision": "05733390a34012b2a388fd35bf2eb704916c30be",
   "host": "macOS-27.2.1-arm64-arm-64bit",
-  "recordedAt": "2026-11-16T17:13:19.752282+00:00"
+  "recordedAt": "2026-11-16T17:29:32.168506+00:00"
 }

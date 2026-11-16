@@ -7,11 +7,11 @@ chrome/firefox/msedge works when installed. Use --cli for a local playwright-cli
 """
 import argparse,json,os,pathlib,shlex,subprocess,tempfile,uuid,hashlib
 from protocol_evidence import source_receipt
-from test_protocols import ROOT,fixture
+from test_protocols import ROOT,fixture,default_executable
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--executable',type=pathlib.Path,default=ROOT/'.lake/build/bin/weave-protocol-fixture')
+    parser.add_argument('--executable',type=pathlib.Path,default=default_executable())
     parser.add_argument('--browser',default='webkit')
     parser.add_argument('--cli',default='npx --yes --package @playwright/cli@0.1.24 playwright-cli')
     parser.add_argument('--report',type=pathlib.Path)

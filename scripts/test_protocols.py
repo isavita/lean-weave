@@ -6,7 +6,7 @@ No network mocks; bounded readiness/deadlines, isolated child, graceful cleanup.
 """
 from __future__ import annotations
 import argparse, base64, contextlib, http.client, json, pathlib, platform, re, hashlib, datetime
-import signal, socket, struct, subprocess, tempfile, threading, time
+import signal, socket, struct, subprocess, sys, tempfile, threading, time
 import grpc
 from grpc_tools import protoc
 from google.protobuf import descriptor_pb2, descriptor_pool, message_factory
@@ -16,6 +16,10 @@ from protocol_evidence import source_receipt
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SERVICE = '/leanweave.test.EchoService/'
+
+def default_executable():
+    suffix = '.exe' if sys.platform == 'win32' else ''
+    return ROOT / '.lake/build/bin' / ('weave-protocol-fixture' + suffix)
 
 def frame(payload, flag=0):
     return bytes([flag]) + struct.pack('>I', len(payload)) + payload
@@ -51,7 +55,8 @@ def fixture(executable):
     with socket.socket() as listener:
         listener.bind(('127.0.0.1', 0)); port = listener.getsockname()[1]
     with tempfile.TemporaryFile() as log:
-        process = subprocess.Popen([str(executable), str(port)], stdout=log, stderr=log)
+        process = subprocess.Popen([str(executable), str(port)], stdout=log, stderr=log,
+            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == 'win32' else 0)
         try:
             deadline = time.monotonic()+10
             while True:
@@ -64,7 +69,7 @@ def fixture(executable):
             yield port
         finally:
             if process.poll() is None:
-                process.send_signal(signal.SIGTERM)
+                process.send_signal(signal.CTRL_BREAK_EVENT if sys.platform == 'win32' else signal.SIGTERM)
                 try: process.wait(timeout=4)
                 except subprocess.TimeoutExpired: process.kill(); process.wait(timeout=4)
             log.seek(0); output=log.read().decode(errors='replace')
@@ -212,7 +217,7 @@ def run(executable):
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--executable',type=pathlib.Path,default=ROOT/'.lake/build/bin/weave-protocol-fixture')
+    parser.add_argument('--executable',type=pathlib.Path,default=default_executable())
     parser.add_argument('--report',type=pathlib.Path)
     args=parser.parse_args();report=run(args.executable)
     if args.report:args.report.parent.mkdir(parents=True,exist_ok=True);args.report.write_text(json.dumps(report,indent=2)+'\n')
