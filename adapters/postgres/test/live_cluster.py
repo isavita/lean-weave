@@ -12,6 +12,8 @@ import time
 import urllib.parse
 import urllib.request
 
+from cluster_support import start_postgres
+
 
 def wait_for_database_disconnects(binary_dir, port, timeout=5):
     """Require remote backend cleanup after local owner finalizers have run.
@@ -79,8 +81,7 @@ def main():
             options += " -c ssl=on"
         started = False
         try:
-            subprocess.run([str(binary_dir / "pg_ctl"), "-D", str(data), "-l", str(log), "-w", "-o",
-                            options, "start"], check=True, stdout=subprocess.DEVNULL)
+            start_postgres(binary_dir, data, log, options)
             started = True
             environment = dict(os.environ, WEAVE_PG_HOSTADDR="127.0.0.1", WEAVE_PG_HOST="localhost",
                                WEAVE_PG_USER="postgres", WEAVE_PG_DATABASE="postgres", WEAVE_PG_SSLMODE="disable")

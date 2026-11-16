@@ -6,7 +6,53 @@ from pathlib import Path
 import shutil
 import socket
 import subprocess
+import sys
 import tempfile
+
+
+def _bounded_tail(stream, limit):
+    """Read at most limit bytes even if the child/server produced a large log."""
+    stream.seek(0, os.SEEK_END)
+    size = stream.tell()
+    stream.seek(max(0, size - limit))
+    text = stream.read(limit).decode("utf-8", errors="replace")
+    return (f"[last {limit} of {size} bytes]\n" if size > limit else "") + text
+
+
+def start_postgres(binary_dir, data, log, options):
+    """Start one private cluster, exposing bounded logs before temp cleanup.
+
+    pg_ctl's generic failure omits the server's actual bind/IPC/TLS error.
+    Keep the original exception and emit only bounded diagnostic tails. The
+    parent deadline also handles an inherited excessive PGCTLTIMEOUT. A server
+    that started after pg_ctl timed out must not outlive its private directory.
+    """
+    command = [str(binary_dir / "pg_ctl"), "-D", str(data), "-l", str(log),
+               "-w", "-o", options, "start"]
+    with tempfile.TemporaryFile() as control:
+        try:
+            subprocess.run(command, check=True, stdout=control, stderr=control, timeout=75)
+        except (subprocess.SubprocessError, OSError):
+            print(f"PostgreSQL startup failed: data={data}, options={options[:4096]}", file=sys.stderr)
+            print("--- pg_ctl output (bounded) ---", file=sys.stderr)
+            print(_bounded_tail(control, 4096), file=sys.stderr)
+            for label, path, limit in [("server log", log, 16384), ("postmaster.pid", data / "postmaster.pid", 1024)]:
+                print(f"--- {label} (bounded) ---", file=sys.stderr)
+                try:
+                    with path.open("rb") as stream:
+                        print(_bounded_tail(stream, limit), file=sys.stderr)
+                except OSError as error:
+                    print(f"unavailable: {error}", file=sys.stderr)
+            sys.stderr.flush()
+            if (data / "postmaster.pid").is_file():
+                with tempfile.TemporaryFile() as cleanup:
+                    try:
+                        subprocess.run([str(binary_dir / "pg_ctl"), "-D", str(data), "-m", "immediate", "-w", "stop"],
+                                       check=True, stdout=cleanup, stderr=cleanup, timeout=15)
+                    except (subprocess.SubprocessError, OSError):
+                        print("--- failed-start cleanup output (bounded) ---", file=sys.stderr)
+                        print(_bounded_tail(cleanup, 4096), file=sys.stderr, flush=True)
+            raise
 
 @dataclass
 class Cluster:
@@ -53,8 +99,7 @@ def cluster(binary_dir=None, tls=False):
             options += " -c ssl=on"
         started = False
         try:
-            subprocess.run([str(binary_dir / "pg_ctl"), "-D", str(data), "-l", str(directory / "server.log"), "-w", "-o", options, "start"],
-                check=True, stdout=subprocess.DEVNULL)
+            start_postgres(binary_dir, data, directory / "server.log", options)
             started = True
             yield Cluster(directory, binary_dir, port, tls)
         finally:
