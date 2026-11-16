@@ -1,6 +1,8 @@
 name: LeanWeave acceptance
 on:
   push:
+    branches: [main]
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
 permissions:

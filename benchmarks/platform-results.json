@@ -1,65 +1,78 @@
 {
-  "utc": "2026-11-16T15:04:57.670560+00:00",
-  "platform": "macOS-27.2.1-arm64-arm-64bit-Mach-O",
+  "utc": "2026-11-16T16:23:14.929320+00:00",
+  "platform": "macOS-27.2.1-arm64-arm-64bit",
   "machine": "arm64",
   "processor": "arm",
   "lean": "Lean (version 4.35.0, arm64-apple-darwin24.6.0, commit eb6cafb7290e8bd5f2937522d8d804f58f02bafc, Release)",
-  "commit": "31affc8ae20a2901beb73c5b31ef3ec931ec112a",
+  "commit": "5f6aa966b8678867719561405d656516cefe3241",
   "dirty": true,
+  "source_sha256": {
+    "benchmarks/Platform.lean": "14a587539a5f87f1bc2bfb232837a7ba44ce43607b123d5447ae783d91554e71",
+    "LeanWeave/Tenant/Basic.lean": "fe515cb3f9ac5165f9ab8bfaef62fa57b1b7d8b8d464f3d489d07af7060210ab",
+    "LeanWeave/Feature/Basic.lean": "d187ef29a0e1b6796eaa7ef8e05cfd748562267e588897c219067dde2ee5a158",
+    "LeanWeave/Security/Crypto.lean": "c9493e2e70988251c21d930ef32b626985664ff13be7a20e7994e4ba8db93997",
+    "LeanWeave/Security/Audit.lean": "344f0ab1dffcc8254be85938bad73c6a6fefd24c8f8160d0cadd0e360ee150a6",
+    "LeanWeave/Observability/Trace.lean": "36e244dbc0c328fb39025f0cd2e38146fb1229e1d6b62d068f40d2b588d40d62",
+    "LeanWeave/Observability/Logging.lean": "95de4128a262312c66e83c5b6375b11ff64914c0db40ef44d92ee2ceefbc1887",
+    "LeanWeave/Realtime/PubSub.lean": "8d2a769ee6583b55a1dcc6a3793927d163ea186a27417bad4ece9c24b98612e6",
+    "scripts/benchmark.py": "9b51ebeaf602ecafb78972f7f9c786bcc3767b5269c9b57e02c22a7bda4ffb40",
+    "lake-manifest.json": "d3080ee9a6cb2ec0ecfc6a040ae9355cd3b4a0523676edca888acc9d3d614fed"
+  },
+  "binary_sha256": "98bbf43ed5121274639cce99ed039f0d18e9f15819baef8b90741a83171c8580",
   "measurement": "Native wall time and IO.getNumHeartbeats thread-local small allocation deltas; excludes large byte buffers, native malloc, RSS, sockets and TLS. Counts include loop and IO scaffolding.",
   "samples": [
     {
       "checksum": 25000,
       "iterations": 5000,
       "name": "tenant_subdomain_resolution",
-      "nanoseconds": 3801000,
+      "nanoseconds": 3018250,
       "small_allocations": 70002,
-      "ns_per_iteration": 760.2,
+      "ns_per_iteration": 603.65,
       "small_allocations_per_iteration": 14.0004
     },
     {
       "checksum": 25032450,
       "iterations": 5000,
       "name": "feature_sticky_cohort",
-      "nanoseconds": 15996250,
+      "nanoseconds": 14366167,
       "small_allocations": 82552,
-      "ns_per_iteration": 3199.25,
+      "ns_per_iteration": 2873.2334,
       "small_allocations_per_iteration": 16.5104
     },
     {
       "checksum": 5000,
       "iterations": 5000,
       "name": "sampled_span_start_finish_take",
-      "nanoseconds": 98997416,
-      "small_allocations": 112466,
-      "ns_per_iteration": 19799.4832,
-      "small_allocations_per_iteration": 22.4932
+      "nanoseconds": 99856750,
+      "small_allocations": 112419,
+      "ns_per_iteration": 19971.35,
+      "small_allocations_per_iteration": 22.4838
     },
     {
       "checksum": 993890,
       "iterations": 5000,
       "name": "structured_log_enqueue_take",
-      "nanoseconds": 33326917,
+      "nanoseconds": 32904917,
       "small_allocations": 500002,
-      "ns_per_iteration": 6665.3834,
+      "ns_per_iteration": 6580.9834,
       "small_allocations_per_iteration": 100.0004
     },
     {
       "checksum": 1622786,
       "iterations": 5000,
       "name": "audit_hash_chain_append",
-      "nanoseconds": 77123667,
+      "nanoseconds": 77120916,
       "small_allocations": 1545002,
-      "ns_per_iteration": 15424.7334,
+      "ns_per_iteration": 15424.1832,
       "small_allocations_per_iteration": 309.0004
     },
     {
       "checksum": 5000,
       "iterations": 5000,
       "name": "local_pubsub_fanout_poll",
-      "nanoseconds": 4421709,
+      "nanoseconds": 4399459,
       "small_allocations": 180002,
-      "ns_per_iteration": 884.3418,
+      "ns_per_iteration": 879.8918,
       "small_allocations_per_iteration": 36.0004
     }
   ]
