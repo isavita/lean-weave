@@ -1,5 +1,6 @@
 import LeanWeave.Html.Basic
 import LeanWeave.Core.Body
+import LeanWeave.Core.Decode
 import LeanWeave.SSE
 import LeanWeave.Live.Client
 import LeanNet.WebSocket.Server
@@ -26,6 +27,8 @@ structure Config where
   secureCookie : Bool := true
   cookieName : String := "__Host-weave-live"
   maxSessions : Nat := 128
+  /-- Independent mounted views per browser owner; the global bound still applies. -/
+  maxViewsPerOwner : Nat := 16
   maxStateBytes : Nat := 1048576
   maxHtmlBytes : Nat := 262144
   maxMessageBytes : Nat := 65536
@@ -36,6 +39,7 @@ structure Config where
 
 private structure Session (State : Type) where
   id : String
+  owner : String
   csrf : String
   state : State
   rendered : Array (String × String)
@@ -66,18 +70,33 @@ def Runtime.new (component : Component State Event) (config : Config) : IO (Runt
       config.basePath.toList.any (fun c => c == '?' || c == '#' || c == '\\' || c.toNat <= 32) ||
       !validKey config.cookieName || (config.cookieName.startsWith "__Host-" && !config.secureCookie) ||
       config.maxSessions == 0 || config.maxSessions > 4096 || config.maxStateBytes == 0 ||
+      config.maxViewsPerOwner == 0 || config.maxViewsPerOwner > 4096 ||
       config.maxHtmlBytes == 0 || config.maxMessageBytes == 0 || config.maxMessageBytes > 1048576 ||
       config.maxQueuedMessages == 0 || config.maxQueuedBytes < config.maxMessageBytes ||
       config.ttlMs < 1000 || config.keepAliveMs == 0 then
     throw (IO.userError "invalid bounded Live runtime configuration")
   return ⟨← IO.mkRef #[], component, config⟩
 
+private def validToken (value : String) : Bool := value.utf8ByteSize == 64 && value.toUTF8.data.all
+  (fun b => (b >= 48 && b <= 57) || (b >= 97 && b <= 102))
+
 private def cookieId (headers : Array LeanNet.HTTP1.Header) (name : String) : Option String := do
-  let cookie ← header? headers "cookie"
-  let part ← (cookie.splitOn ";").find? fun part => part.trimAscii.toString.startsWith (name ++ "=")
-  let value := String.intercalate "=" ((part.trimAscii.toString.splitOn "=").drop 1)
-  if value.utf8ByteSize != 64 || !value.toUTF8.data.all (fun b =>
-      (b >= 48 && b <= 57) || (b >= 97 && b <= 102)) then none else some value
+  let mut values : Array String := #[]
+  for header in headers do
+    if header.name.toLower == "cookie" then
+      let cookie ← String.fromUTF8? header.value
+      for part in cookie.splitOn ";" do
+        let part := part.trimAscii.toString
+        if part.startsWith (name ++ "=") then values := values.push (part.drop (name.length + 1)).toString
+  if values.size != 1 then none else
+    let value := values[0]!
+    if validToken value then some value else none
+
+private def viewId (ctx : Context) : Option String := do
+  let values := ctx.query.filter (·.1 == "view")
+  if values.size != 1 then none else
+    let value := values[0]!.2
+    if validToken value then some value else none
 
 private def Runtime.rendered (runtime : Runtime State Event) (state : State) : Except String (Array (String × String)) := do
   if runtime.component.stateBytes state > runtime.config.maxStateBytes then throw "Live state exceeds byte reservation"
@@ -103,41 +122,50 @@ private def packet (kind : String) (version : Nat) (patches : Array Lean.Json) :
 private def snapshotPacket (session : Session State) : ByteArray :=
   packet "snapshot" session.version (session.rendered.map fun (key, html) => patchJson key (some html))
 
-private def Runtime.lookup (runtime : Runtime State Event) (headers : Array LeanNet.HTTP1.Header) : IO (Option (Session State)) := do
+private def Runtime.lookup (runtime : Runtime State Event) (ctx : Context) : IO (Option (Session State)) := do
   let now ← IO.monoMsNow
   runtime.sessions.modify (·.filter (fun session => now < session.expires))
-  let some id := cookieId headers runtime.config.cookieName | return none
-  return (← runtime.sessions.get).find? (·.id == id)
+  let some owner := cookieId ctx.request.headers runtime.config.cookieName | return none
+  let some id := viewId ctx | return none
+  return (← runtime.sessions.get).find? (fun session => session.owner == owner && session.id == id)
 
 private def Runtime.put (runtime : Runtime State Event) (session : Session State) : IO Unit :=
   runtime.sessions.modify fun sessions => (sessions.filter (·.id != session.id)).push session
 
-/-- Mount an opaque cookie-bound server session. Caller controls page access
+/-- Mount independent view state under an opaque browser-owner cookie. The DOM
+view ID is a selector, never a credential; lookup requires its owner cookie too.
+Caller controls page access
 through its normal authenticated browser pipeline. All dynamic HTML is escaped. -/
 def Runtime.mount (runtime : Runtime State Event) (ctx : Context) : IO Response := do
   if runtime.config.secureCookie && !ctx.secure then return Response.text "Live requires HTTPS" 400
   let now ← IO.monoMsNow
   runtime.sessions.modify (·.filter (fun session => now < session.expires))
-  let previous := cookieId ctx.request.headers runtime.config.cookieName
-  let retained := (← runtime.sessions.get).filter (fun session => previous != some session.id)
+  let retained ← runtime.sessions.get
   if retained.size >= runtime.config.maxSessions then return Response.text "Live session capacity exhausted" 503
+  let previous := cookieId ctx.request.headers runtime.config.cookieName
+  let owner ← match previous with
+    | some owner => if retained.any (·.owner == owner) then pure owner else randomToken
+    | none => randomToken
+  if (retained.filter (·.owner == owner)).size >= runtime.config.maxViewsPerOwner then
+    return Response.text "Live browser view capacity exhausted" 503
   let state ← runtime.component.mount ctx
   let .ok rendered := runtime.rendered state | return Response.text "Live rendering exceeds bounds" 503
   let id ← randomToken
   let csrf ← randomToken
-  let session : Session State := { id, csrf, state, rendered, expires := now + runtime.config.ttlMs }
+  let session : Session State := { id, owner, csrf, state, rendered, expires := now + runtime.config.ttlMs }
   if (snapshotPacket session).size > runtime.config.maxMessageBytes then return Response.text "Live snapshot exceeds message bound" 503
   runtime.sessions.set retained
   runtime.put session
   let metadataHtml := Html.fragment #[
     Html.void .meta_ #[.text .name "weave-base", .text .content runtime.config.basePath],
+    Html.void .meta_ #[.text .name "weave-view", .text .content id],
     Html.void .meta_ #[.text .name "weave-csrf", .text .content csrf]]
   let regions := rendered.map fun (key, html) => Html.element .div #[.text .id ("weave-" ++ key)] #[Html.rawUnsafe html.toUTF8]
   let page := Html.fragment #[Html.rawUnsafe "<!doctype html><html><head><meta charset=\"utf-8\">".toUTF8,
     metadataHtml, Html.rawUnsafe "</head><body>".toUTF8,
     Html.element .main #[.text .id "weave-live"] regions,
     Html.rawUnsafe (("<script defer src=\"".toUTF8 |> fun b => Html.escapeInto b (runtime.config.basePath ++ "/client.js")) ++ "\"></script></body></html>".toUTF8)]
-  let cookie := s!"{runtime.config.cookieName}={id}; Path=/; HttpOnly; SameSite=Strict; Max-Age={runtime.config.ttlMs / 1000}" ++
+  let cookie := s!"{runtime.config.cookieName}={owner}; Path=/; HttpOnly; SameSite=Strict; Max-Age={runtime.config.ttlMs / 1000}" ++
     (if runtime.config.secureCookie then "; Secure" else "")
   return (Html.toResponse page).withHeader "set-cookie" cookie |>.withHeader "cache-control" "no-store"
     |>.withHeader "referrer-policy" "no-referrer" |>.withHeader "content-security-policy" "default-src 'self'; script-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
@@ -145,8 +173,8 @@ def Runtime.mount (runtime : Runtime State Event) (ctx : Context) : IO Response 
 /-- Revoke the cookie-bound Live state on logout/permission revocation. Existing
 connections terminate on their next owner-worker poll. -/
 def Runtime.invalidate (runtime : Runtime State Event) (ctx : Context) : IO Unit := do
-  if let some id := cookieId ctx.request.headers runtime.config.cookieName then
-    runtime.sessions.modify (·.filter (·.id != id))
+  if let some owner := cookieId ctx.request.headers runtime.config.cookieName then
+    runtime.sessions.modify (·.filter (·.owner != owner))
 
 def Runtime.close (runtime : Runtime State Event) : IO Unit := runtime.sessions.set #[]
 
@@ -158,12 +186,14 @@ private def equalToken (left right : String) : Bool := Id.run do
   for i in [:a.size] do difference := difference ||| (a[i]! ^^^ b[i]!)
   return difference == 0
 
-private def Runtime.dispatch (runtime : Runtime State Event) (id : String) (bytes : ByteArray) : IO (Except String Unit) := do
+private def Runtime.dispatch (runtime : Runtime State Event) (id : String) (bytes : ByteArray)
+    (generation : Option Nat := none) : IO (Except String Unit) := do
   if bytes.size > runtime.config.maxMessageBytes then return .error "Live command exceeds byte bound"
   let .ok json := Body.json bytes { maxBytes := runtime.config.maxMessageBytes } | return .error "Live command JSON bounds/encoding rejected"
   let sessions ← runtime.sessions.get
   let some session := sessions.find? (·.id == id) | return .error "Live session expired"
   if (← IO.monoMsNow) >= session.expires then return .error "Live session expired"
+  if generation.any (· != session.generation) then return .error "Live connection superseded"
   let .ok csrf := json.getObjValAs? String "csrf" | return .error "Live CSRF missing"
   if !equalToken csrf session.csrf then return .error "Live CSRF rejected"
   let .ok event := json.getObjVal? "event" | return .error "Live event missing"
@@ -184,8 +214,8 @@ private def Runtime.dispatch (runtime : Runtime State Event) (id : String) (byte
   runtime.put next
   return .ok ()
 
-private def Runtime.open (runtime : Runtime State Event) (headers : Array LeanNet.HTTP1.Header) : IO (Except String (String × Nat)) := do
-  let some session ← runtime.lookup headers | return .error "Live session missing"
+private def Runtime.open (runtime : Runtime State Event) (ctx : Context) : IO (Except String (String × Nat)) := do
+  let some session ← runtime.lookup ctx | return .error "Live session missing"
   let next := { session with generation := session.generation + 1, outbox := #[snapshotPacket session], queuedBytes := (snapshotPacket session).size }
   runtime.put next
   return .ok (next.id, next.generation)
@@ -201,14 +231,14 @@ private def Runtime.poll (runtime : Runtime State Event) (id : String) (generati
 def Runtime.post (runtime : Runtime State Event) (ctx : Context) : IO Response := do
   if ctx.request.method != "POST" then return (Response.text "Method not allowed" 405).withHeader "allow" "POST"
   if ctx.header "origin" != some runtime.config.origin then return Response.text "Live Origin rejected" 403
-  let some session ← runtime.lookup ctx.request.headers | return Response.text "Live session missing" 401
+  let some session ← runtime.lookup ctx | return Response.text "Live session missing" 401
   match ← runtime.dispatch session.id ctx.request.body with
   | .ok () => return { status := 204 }
   | .error _ => return Response.text "Live command rejected" 403
 
 def Runtime.sse (runtime : Runtime State Event) (ctx : Context) : IO Response := do
   if (ctx.header "origin").any (· != runtime.config.origin) then return Response.text "Live Origin rejected" 403
-  let .ok (id, generation) ← runtime.open ctx.request.headers | return Response.text "Live session missing" 401
+  let .ok (id, generation) ← runtime.open ctx | return Response.text "Live session missing" 401
   let pending ← IO.mkRef ByteArray.empty
   let emitted ← IO.mkRef (← IO.monoMsNow)
   let body : Stream.Body := {
@@ -232,13 +262,13 @@ def Runtime.sse (runtime : Runtime State Event) (ctx : Context) : IO Response :=
     close := fun _ => pending.set ByteArray.empty }
   return (Response.streaming body).withHeader "content-type" "text/event-stream" |>.withHeader "cache-control" "no-store"
 
-private def Runtime.callbacks (runtime : Runtime State Event) (headers : Array LeanNet.HTTP1.Header) : IO (Option LeanNet.WebSocket.Callbacks) := do
-  let .ok (id, generation) ← runtime.open headers | return none
+private def Runtime.callbacks (runtime : Runtime State Event) (ctx : Context) : IO (Option LeanNet.WebSocket.Callbacks) := do
+  let .ok (id, generation) ← runtime.open ctx | return none
   let emitted ← IO.mkRef (← IO.monoMsNow)
   return some {
     onMessage := fun opcode bytes => do
       if opcode != .text then throw (IO.userError "Live requires text messages")
-      let .ok () ← runtime.dispatch id bytes | throw (IO.userError "Live command rejected")
+      let .ok () ← runtime.dispatch id bytes (some generation) | throw (IO.userError "Live command rejected")
       return none
     onPoll := do
       if let some bytes ← runtime.poll id generation then
@@ -253,13 +283,17 @@ def Runtime.upgradeHTTP1 (runtime : Runtime State Event) (head : LeanNet.HTTP1.R
   let policy : LeanNet.WebSocket.Handshake.Policy := { originAllowed := fun value => value == some runtime.config.origin.toUTF8 }
   if let .error rejection := LeanNet.WebSocket.Handshake.acceptHTTP1 head policy then
     return .reject { response := { status := rejection.status } }
-  let some callbacks ← runtime.callbacks head.headers | return .reject { response := { status := 401 } }
+  let .ok ctx := Context.fromRequest { method := head.method, version := head.version, target := head.target, headers := head.headers, body := ByteArray.empty }
+    | return .reject { response := { status := 400 } }
+  let some callbacks ← runtime.callbacks ctx | return .reject { response := { status := 401 } }
   LeanNet.WebSocket.Server.acceptHTTP1 head policy callbacks
 
 def Runtime.upgradeHTTP2 (runtime : Runtime State Event) (head : LeanNet.HTTP2.RequestHead) : IO (Option (LeanNet.WebSocket.Handshake.Policy × LeanNet.WebSocket.Callbacks)) := do
   let policy : LeanNet.WebSocket.Handshake.Policy := { originAllowed := fun value => value == some runtime.config.origin.toUTF8 }
   if let .error _ := LeanNet.WebSocket.Handshake.acceptHTTP2 head head.protocol policy then return none
-  let some callbacks ← runtime.callbacks head.headers | return none
+  let .ok ctx := Context.fromRequest { method := head.method, version := "HTTP/2", target := head.target, headers := head.headers, body := ByteArray.empty }
+    | return none
+  let some callbacks ← runtime.callbacks ctx | return none
   return some (policy, callbacks)
 
 def clientResponse : Response :=

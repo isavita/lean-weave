@@ -8,6 +8,12 @@ def clientScript : String := r###"
   if (!root) return;
   const base = document.querySelector('meta[name=weave-base]').content;
   const csrf = document.querySelector('meta[name=weave-csrf]').content;
+  const view = document.querySelector('meta[name=weave-view]').content;
+  function endpoint(path) {
+    const url = new URL(base + path, location.href);
+    url.searchParams.set('view', view);
+    return url;
+  }
   let version = -1, ws = null, source = null;
   function apply(message) {
     if (!Number.isSafeInteger(message.version)) throw Error('invalid live version');
@@ -29,14 +35,14 @@ def clientScript : String := r###"
     if (ws) { const previous = ws; ws = null; previous.onclose = null; previous.close(); }
     if (source) return;
     root.dataset.transport = 'sse';
-    source = new EventSource(base + '/events');
+    source = new EventSource(endpoint('/events'));
     source.addEventListener('patch', event => apply(JSON.parse(event.data)));
   }
   async function send(event) {
     const command = JSON.stringify({event, csrf});
     if (ws && ws.readyState === WebSocket.OPEN) ws.send(command);
     else {
-      const result = await fetch(base + '/event', {method:'POST', credentials:'same-origin', headers:{'content-type':'application/json'}, body:command});
+      const result = await fetch(endpoint('/event'), {method:'POST', credentials:'same-origin', headers:{'content-type':'application/json'}, body:command});
       if (!result.ok) throw Error('live command rejected: ' + result.status);
     }
   }
@@ -47,7 +53,7 @@ def clientScript : String := r###"
   });
   if (new URLSearchParams(location.search).has('sse')) fallback();
   else {
-    const url = new URL(base + '/socket', location.href); url.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const url = endpoint('/socket'); url.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
     ws = new WebSocket(url);
     ws.onopen = () => { root.dataset.transport = 'websocket'; };
     ws.onmessage = event => apply(JSON.parse(event.data));

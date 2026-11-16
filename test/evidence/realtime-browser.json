@@ -1,22 +1,46 @@
 {
-  "recordedAt": "2026-11-16T14:18:11.337799+00:00",
-  "browser": "Chrome for Testing 158.0.8127.18",
-  "fixture": "weave-realtime-fixture",
-  "command": "playwright-cli open http://127.0.0.1:PORT --browser chromium; playwright-cli run-code --filename=test/browser_realtime.cjs",
+  "browser": "27.2",
+  "browserEngine": "webkit",
   "websocket": {
     "transport": "websocket",
     "count": "1",
     "version": "1",
-    "unchangedNodePreserved": true,
-    "keepaliveBeyondIdleDeadline": true,
-    "idleDeadlineMs": 300,
-    "observedMs": 800
+    "unchangedNodePreserved": true
   },
   "sse": {
     "transport": "sse",
     "count": "1",
     "version": "1",
     "error": null
+  },
+  "multiTab": {
+    "stableOwnerCookie": true,
+    "distinctViewIds": true,
+    "independentWebSocketStates": [
+      {
+        "transport": "websocket",
+        "count": "0",
+        "error": null
+      },
+      {
+        "transport": "websocket",
+        "count": "2",
+        "error": null
+      }
+    ],
+    "mixedTransports": {
+      "sse": {
+        "transport": "sse",
+        "count": "1",
+        "version": "1",
+        "error": null
+      },
+      "survivingTab": {
+        "transport": "websocket",
+        "count": "1",
+        "error": null
+      }
+    }
   },
   "csp": {
     "allowed": true,
@@ -25,7 +49,12 @@
     "headerMatches": true,
     "freshOnSecondRequest": true
   },
-  "limitations": [
-    "Single local Chromium browser; physical devices and other browser engines not tested."
-  ]
+  "runner": "native loopback server + Playwright CLI real browser",
+  "source_sha256": {
+    "test/browser_realtime.cjs": "97b776dafe93f8df33f9430246c6b0c67f5b16e00c591e9f22884d55d6ba9546",
+    "LeanWeave/Test/RealtimeFixture.lean": "df18f965156fe08c8df1d8b3fc2e82489c3f2566d6e84e5879cdc61ed8365c22",
+    "LeanWeave/Live.lean": "94f2af9722b7cfd6de4a9bb85642e49ab4bba45b79ea12f9e368a5062189addc",
+    "LeanWeave/Live/Client.lean": "8ac889a735de9e16d72975f229786a479494dd8c9ef320313cba57cafd75c16c",
+    "LeanWeave/Security/Csp.lean": "6a433c6c6422e114ee9bbb266fed3d0424514d249a9fa08e990ea389781b7469"
+  }
 }

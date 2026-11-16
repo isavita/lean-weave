@@ -41,6 +41,10 @@ private def application (port : Nat) : IO Server.Application := do
     | ["live", "client.js"] => return Live.clientResponse
     | ["live", "event"] => return ← live.post ctx
     | ["live", "events"] => return ← live.sse ctx
+    | ["live", "invalidate"] =>
+      if ctx.request.method != "POST" || ctx.header "origin" != some origin then return Response.text "Forbidden" 403
+      live.invalidate ctx
+      return Response.text "" 204
     | ["events"] => return ← store.response ctx
     | ["publish"] =>
       match ← store.publish { data := (ctx.queryValue "data").getD "event" } with
@@ -56,10 +60,12 @@ private def application (port : Nat) : IO Server.Application := do
     handler
     tickIntervalMs := 2
     onUpgrade := fun head _ => do
-      if head.target == "/live/socket".toUTF8 && head.version != "HTTP/2" then return some (← live.upgradeHTTP1 head)
+      let ctx := Context.fromRequest { method := head.method, version := head.version, target := head.target, headers := head.headers, body := ByteArray.empty }
+      if ctx.toOption.any (·.path == #["live", "socket"]) && head.version != "HTTP/2" then return some (← live.upgradeHTTP1 head)
       return none
     onWebSocket := fun head => do
-      if head.target == "/live/socket".toUTF8 then live.upgradeHTTP2 head else pure none }
+      let ctx := Context.fromRequest { method := head.method, version := "HTTP/2", target := head.target, headers := head.headers, body := ByteArray.empty }
+      if ctx.toOption.any (·.path == #["live", "socket"]) then live.upgradeHTTP2 head else pure none }
 
 def main (args : List String) : IO Unit := do
   let some port := args[0]?.bind String.toNat? | throw (IO.userError "usage: weave-realtime-fixture PORT")
