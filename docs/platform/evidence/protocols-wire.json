@@ -1,0 +1,26 @@
+{
+  "passed": 11,
+  "checks": [
+    "official grpcio unary; UTF8, packed integers, map, optional zero, bytes",
+    "official grpcio server streaming + status trailers",
+    "official grpcio client streaming",
+    "official grpcio bidirectional response before request half-close",
+    "480KB duplex upload/output with HTTP2 flow control",
+    "official protobuf all scalar limits, enums, recursive messages, map, oneof, unknown groups",
+    "standard application-error and unknown-method status trailers",
+    "HTTP2 malformed/truncated/oversized frames, cardinality, compression, deadline",
+    "gRPC-Web binary+text unary/server streaming over HTTP1 and HTTP2",
+    "client cancellation cleanup and subsequent connection reuse",
+    "actual typed REST handler + generated OpenAPI HTTP endpoint"
+  ],
+  "clients": {
+    "grpcio": "1.80.1",
+    "protobuf": "6.33.5"
+  },
+  "host": "macOS-27.2.1-arm64-arm-64bit",
+  "transport": "real TCP loopback; HTTP1 and h2c; no TLS",
+  "sourceCommit": "1dcaae6fd26cb9296089d249f6603b809d156e73",
+  "sourceDirty": true,
+  "fixtureSourceSha256": "9cb3f8069e127e6529057a9681a4c4d1ff2d177f542876ca6308cf9fb08b42c4",
+  "recordedAt": "2026-11-16T14:26:59.747460+00:00"
+}

@@ -1,0 +1,14 @@
+{
+  "passed": 6,
+  "checks": [
+    "binary official grpc-web unary with protobuf BinaryWriter/BinaryReader",
+    "binary official grpc-web server streaming + parsed status trailer",
+    "binary official grpc-web error status",
+    "text official grpc-web unary with protobuf BinaryWriter/BinaryReader",
+    "text official grpc-web server streaming + parsed status trailer",
+    "text official grpc-web error status"
+  ],
+  "client": "grpc-web 2.1.1; google-protobuf 4.0.3",
+  "transport": "real browser XMLHttpRequest to native HTTP1 TCP; no TLS",
+  "browser": "27.2"
+}

@@ -1,0 +1,8 @@
+{
+  "name": "lean-weave-protocol-browser-tests",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Official grpc-web and protobuf runtime browser interoperability tests",
+  "dependencies": {"grpc-web":"2.1.1","google-protobuf":"4.0.3"},
+  "devDependencies": {"esbuild":"0.28.2"}
+}

@@ -1,0 +1,25 @@
+{
+  "passed": 19,
+  "positive": 1,
+  "negative": 18,
+  "checks": [
+    "schema contradictory text bounds",
+    "schema duplicate bounds",
+    "schema constraints on wrong type",
+    "schema impossible natural range",
+    "schema duplicate fields",
+    "protobuf duplicate field number",
+    "protobuf reserved field",
+    "protobuf unknown type",
+    "protobuf invalid map key",
+    "protobuf enum nonzero first",
+    "protobuf service nonmessage",
+    "protobuf codegen reserved field",
+    "protobuf duplicate service method",
+    "typed RPC signature",
+    "typed RPC nonexistent method",
+    "typed RPC duplicate method",
+    "typed API ambiguous routes",
+    "typed API wrong input handler"
+  ]
+}

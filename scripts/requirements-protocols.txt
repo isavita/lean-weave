@@ -1,0 +1,9 @@
+# Official protobuf compiler/runtime and gRPC client; independent HTTP/2 stack.
+grpcio==1.80.1
+grpcio-tools==1.80.1
+protobuf==6.33.5
+h2==4.3.0
+hpack==4.1.0
+hyperframe==6.1.0
+typing-extensions==4.16.0
+setuptools==82.0.1
