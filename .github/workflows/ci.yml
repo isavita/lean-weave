@@ -28,7 +28,6 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           brew install zlib brotli pkgconf
-          echo "PKG_CONFIG_PATH=$(brew --prefix zlib)/lib/pkgconfig" >> "$GITHUB_ENV"
       - name: Windows native dependencies
         if: runner.os == 'Windows'
         id: msys
@@ -49,6 +48,10 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.14'
+      - name: Restore macOS codec lookup after Python setup
+        if: runner.os == 'macOS'
+        run: |
+          echo "PKG_CONFIG_PATH=$(brew --prefix zlib)/lib/pkgconfig:$(brew --prefix brotli)/lib/pkgconfig:${PKG_CONFIG_PATH:-}" >> "$GITHUB_ENV"
       - uses: leanprover/lean-action@v1
         with:
           auto-config: false
