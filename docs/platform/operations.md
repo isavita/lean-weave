@@ -168,6 +168,13 @@ opt-in to the TLS backend's system trust behavior, which can perform filesystem
 or system-store work during connection setup. Peer and hostname verification
 remain enabled in either mode. On macOS select Homebrew curl through pkg-config
 rather than the system SecureTransport build when using strict CA blobs.
+On Windows, select the [MSYS2](https://github.com/msys2/MINGW-packages/blob/master/mingw-w64-curl/PKGBUILD) `mingw-w64-x86_64-curl` OpenSSL package rather
+than `curl-winssl`, place its `mingw64/bin` first on `PATH`, and point
+`PKG_CONFIG_PATH` at its `mingw64/lib/pkgconfig`. Restore that selection after
+Python setup tools modify these variables. Set [`CURL_SSL_BACKEND=openssl`](https://curl.se/libcurl/c/libcurl-env.html)
+before starting the process when using a multi-backend curl build, and verify
+the selected native `curl --version` reports both OpenSSL and HTTP2. The strict
+adapter still rejects an incompatible active TLS backend.
 
 `Http.Vault.backend` implements KV v2 with certificate-verified TLS. Bind named
 sources to a mount/path/field and give `Secrets.Manager` its backend. Timer pulses
