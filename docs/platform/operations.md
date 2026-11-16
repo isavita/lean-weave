@@ -176,6 +176,19 @@ before starting the process when using a multi-backend curl build, and verify
 the selected native `curl --version` reports both OpenSSL and HTTP2. The strict
 adapter still rejects an incompatible active TLS backend.
 
+Package the Windows DLL dependency closure next to each stopped application:
+
+```sh
+lake env python adapters/http/scripts/stage_windows_runtime.py path/to/application.exe
+```
+
+The helper resolves the selected libcurl through pkg-config and copies its
+transitive native DLL dependencies from the matching MSYS2 installation. Windows
+loads application-directory DLLs before other toolchain directories on `PATH`.
+The HTTP fixture applies this packaging step and verifies the native process's
+actual libcurl version, TLS backend and loaded DLL path for every protocol case.
+Unsupported-backend startup errors include the same bounded diagnostics.
+
 `Http.Vault.backend` implements KV v2 with certificate-verified TLS. Bind named
 sources to a mount/path/field and give `Secrets.Manager` its backend. Timer pulses
 load and rotate bounded values. The bootstrap token callback is re-read for every

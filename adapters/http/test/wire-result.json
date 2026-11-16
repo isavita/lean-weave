@@ -16,7 +16,8 @@
       "strict_ca_startup_bounds": false,
       "explicit_system_trust_opt_in": false,
       "negotiation_asserted_by_header": true,
-      "server_connections": 0
+      "server_connections": 0,
+      "runtime_backend": "libcurl=8.23.0; TLS=OpenSSL/4.1.0; module=<platform loader>"
     },
     {
       "tls": true,
@@ -34,7 +35,8 @@
       "strict_ca_startup_bounds": true,
       "explicit_system_trust_opt_in": true,
       "negotiation_asserted_by_header": true,
-      "server_connections": 5
+      "server_connections": 5,
+      "runtime_backend": "libcurl=8.23.0; TLS=OpenSSL/4.1.0; module=<platform loader>"
     },
     {
       "tls": true,
@@ -52,15 +54,18 @@
       "strict_ca_startup_bounds": true,
       "explicit_system_trust_opt_in": true,
       "negotiation_asserted_by_header": true,
-      "server_connections": 8
+      "server_connections": 8,
+      "runtime_backend": "libcurl=8.23.0; TLS=OpenSSL/4.1.0; module=<platform loader>"
     }
   ],
   "platform": "macOS-27.2.1-arm64-arm-64bit-Mach-O",
   "independent_h2": "4.4.1",
+  "windows_runtime": null,
   "sources_sha256": {
-    "test/Main.lean": "6d08561c727f28c481f0de10d172d43757300ad29734ff050801fcb9286036dc",
-    "test/wire.py": "bdbb35d272a4174ae8203950667913ad082dfb432d83a0e51319ce8f7c8bf3db",
+    "test/Main.lean": "1bfeaadfcb58982cbfd88138bf1c1d611f56e0e9a1c51e28a5e128309e8bc829",
+    "test/wire.py": "03c20a68a96f89603b87d496fb166672c7cdfad4e8f1cedf48ab37dd4b8443b2",
     "LeanWeaveHttp/Client.lean": "97dd2b866dca2fab7991e606d74c4faf0e31d50f0be033d0e0c69e8eb83af30b",
-    "c/http.c": "7c60c6368b62c206501074228bdec240fc66c8ca7ab83d094854e8f5921af379"
+    "c/http.c": "2f7bd62966de3f57816513f4b869333be8b2b049e8018fb925054f6e899fe861",
+    "scripts/stage_windows_runtime.py": "06687eee7ba199827b66af14fd4619b99e2cd4c3ccd0306afd6ddabcf99fdb36"
   }
 }

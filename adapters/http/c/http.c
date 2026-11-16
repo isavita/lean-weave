@@ -1,6 +1,7 @@
 #include <lean/lean.h>
 #include <curl/curl.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #ifdef _WIN32
@@ -55,6 +56,32 @@ static void ensure_init(void) { InitOnceExecuteOnce(&once,initialize_once,NULL,N
 static pthread_once_t once=PTHREAD_ONCE_INIT;
 static void ensure_init(void) { pthread_once(&once,initialize); }
 #endif
+/* Startup diagnostics describe the library actually imported by this process,
+ * rather than a curl command found elsewhere on PATH. All fields are bounded. */
+static void backend_description(char *output,size_t capacity) {
+    const curl_version_info_data *version=curl_version_info(CURLVERSION_NOW);
+    char module_path[768]="<platform loader>";
+#ifdef _WIN32
+    HMODULE module=NULL;
+    if(GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+            (LPCWSTR)(uintptr_t)&curl_version_info,&module)) {
+        WCHAR path[512];
+        DWORD length=GetModuleFileNameW(module,path,512);
+        if(length && length<512) {
+            int bytes=WideCharToMultiByte(CP_UTF8,0,path,(int)length,module_path,sizeof(module_path)-1,NULL,NULL);
+            if(bytes>0) module_path[bytes]=0;
+        }
+    }
+#endif
+    snprintf(output,capacity,"libcurl=%.64s; TLS=%.128s; module=%.767s",
+        version && version->version ? version->version : "<unknown>",
+        version && version->ssl_version ? version->ssl_version : "<none>",module_path);
+}
+LEAN_EXPORT lean_obj_res weave_http_backend_info(lean_obj_arg world) {
+    (void)world;ensure_init();
+    char description[1024];backend_description(description,sizeof(description));
+    return lean_io_result_mk_ok(lean_mk_string(description));
+}
 LEAN_EXPORT lean_obj_res weave_http_init(lean_obj_arg world) {
     (void)world;ensure_init();
     if(global_result!=CURLE_OK) return failure("HTTP global initialization failed");
@@ -80,8 +107,11 @@ static int supports_ca_blob(void) {
 }
 LEAN_EXPORT lean_obj_res weave_http_validate_ca_blob(lean_obj_arg world) {
     (void)world;ensure_init();
-    if(global_result!=CURLE_OK || !supports_ca_blob())
-        return failure("strict HTTP CA blobs require an OpenSSL-compatible libcurl backend");
+    if(global_result!=CURLE_OK || !supports_ca_blob()) {
+        char description[1024],message[1152];backend_description(description,sizeof(description));
+        snprintf(message,sizeof(message),"strict HTTP CA blobs require an OpenSSL-compatible libcurl backend (%s)",description);
+        return failure(message);
+    }
     return lean_io_result_mk_ok(lean_box(0));
 }
 static size_t append(char *data,size_t size,size_t count,void *argument) {

@@ -16,6 +16,7 @@ import select
 import socketserver
 import ssl
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -158,6 +159,13 @@ def certificate(cert, key, name):
 
 def main():
     root = Path(__file__).resolve().parents[1]
+    executable = root / ".lake/build/bin" / ("weave-http-test.exe" if os.name == "nt" else "weave-http-test")
+    windows_runtime = None
+    if os.name == "nt":
+        packaged = subprocess.run([sys.executable, str(root / "scripts/stage_windows_runtime.py"), str(executable)],
+            check=True, text=True, capture_output=True, timeout=60)
+        windows_runtime = json.loads(packaged.stdout)
+        print("STAGED native Windows libcurl runtime: " + json.dumps(windows_runtime), flush=True)
     results = []
     with tempfile.TemporaryDirectory(prefix="leanweave-http-") as temporary:
         temporary = Path(temporary)
@@ -187,9 +195,15 @@ def main():
                 env = {**os.environ, "WEAVE_HTTP_PORT": str(server.server_port), "WEAVE_HTTP_TLS": str(int(tls)),
                        "WEAVE_HTTP_H2": str(int(http2)), "WEAVE_HTTP_CA": str(cert), "WEAVE_HTTP_BAD_CA": str(bad_ca),
                        "WEAVE_HTTP_LARGE_CA": str(large_ca), "WEAVE_HTTP_MISSING_CA": str(temporary / "missing.pem")}
-                executable = root / ".lake/build/bin" / ("weave-http-test.exe" if os.name == "nt" else "weave-http-test")
                 output = subprocess.run([str(executable)], env=env, capture_output=True, text=True, timeout=30)
                 if output.returncode: raise RuntimeError(output.stdout + output.stderr)
+                backend = next(line.removeprefix("HTTP_BACKEND ") for line in output.stderr.splitlines()
+                               if line.startswith("HTTP_BACKEND "))
+                print("ACTUAL native HTTP backend: " + backend, flush=True)
+                if os.name == "nt":
+                    assert "OpenSSL/" in backend, backend
+                    module = Path(backend.split("; module=", 1)[1])
+                    assert module.resolve().parent == executable.resolve().parent, "runtime DLL was not loaded from the packaged application directory"
                 otlp = json.loads(output.stdout.splitlines()[0])
                 spans = otlp["resourceSpans"][0]["scopeSpans"][0]["spans"]
                 assert len(spans) == 6
@@ -201,16 +215,16 @@ def main():
                     "chunked_or_h2_data_and_trailers": True, "negative_tls_hostname_and_trust": tls,
                     "active_operation_limit": True, "header_origin_injection": True,
                     "startup_ca_no_request_file_dependency": tls,"strict_ca_startup_bounds": tls,"explicit_system_trust_opt_in": tls,
-                    "negotiation_asserted_by_header": True, "server_connections": len(server.alpns)})
+                    "negotiation_asserted_by_header": True, "server_connections": len(server.alpns), "runtime_backend": backend})
                 print(f"PASS native HTTP client {expected} {'TLS' if tls else 'plain'} bounded/trace/timeout/cancel/negotiation", flush=True)
             finally:
                 server.shutdown()
                 server.server_close()
                 thread.join(timeout=3)
                 assert not thread.is_alive(), "fixture listener did not stop"
-    report = {"native": results, "platform": platform.platform(), "independent_h2": version("h2"),
+    report = {"native": results, "platform": platform.platform(), "independent_h2": version("h2"), "windows_runtime": windows_runtime,
         "sources_sha256": {str(path.relative_to(root)): hashlib.sha256(path.read_bytes()).hexdigest()
-            for path in [root / "test/Main.lean", Path(__file__).resolve(), root / "LeanWeaveHttp/Client.lean", root / "c/http.c"]}}
+            for path in [root / "test/Main.lean", Path(__file__).resolve(), root / "LeanWeaveHttp/Client.lean", root / "c/http.c", root / "scripts/stage_windows_runtime.py"]}}
     (root / "test/wire-result.json").write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(results))
 

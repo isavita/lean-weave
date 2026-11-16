@@ -2,6 +2,9 @@ import LeanWeaveHttp
 
 open LeanWeave
 
+@[extern "weave_http_backend_info"]
+private opaque backendInfo : IO String
+
 def drive (action : AppM α) (budget : Nat := 2 * 1024 * 1024) : IO (Except AppError α) := do
   let execution ← AppM.execute action budget
   try
@@ -21,6 +24,7 @@ private def rejectedStartup (config : Http.Config) : IO Bool := do
   catch _ => return true
 
 def main : IO Unit := do
+  IO.eprintln ("HTTP_BACKEND " ++ (← backendInfo))
   check ((Http.decodeOtlpResponse 200 "{}".toUTF8).accepted) "OTLP empty object"
   check ((Http.decodeOtlpResponse 200 "{\"partialSuccess\":{\"rejectedSpans\":\"1\"}}".toUTF8).rejected == 1) "OTLP partial success int64"
   for bad in ["null", "[]", "{\"partialSuccess\":true}", "{\"partialSuccess\":{\"rejectedSpans\":1e1000000000}}",
