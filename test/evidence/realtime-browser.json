@@ -1,0 +1,31 @@
+{
+  "recordedAt": "2026-11-16T14:18:11.337799+00:00",
+  "browser": "Chrome for Testing 158.0.8127.18",
+  "fixture": "weave-realtime-fixture",
+  "command": "playwright-cli open http://127.0.0.1:PORT --browser chromium; playwright-cli run-code --filename=test/browser_realtime.cjs",
+  "websocket": {
+    "transport": "websocket",
+    "count": "1",
+    "version": "1",
+    "unchangedNodePreserved": true,
+    "keepaliveBeyondIdleDeadline": true,
+    "idleDeadlineMs": 300,
+    "observedMs": 800
+  },
+  "sse": {
+    "transport": "sse",
+    "count": "1",
+    "version": "1",
+    "error": null
+  },
+  "csp": {
+    "allowed": true,
+    "wrongBlocked": true,
+    "missingBlocked": true,
+    "headerMatches": true,
+    "freshOnSecondRequest": true
+  },
+  "limitations": [
+    "Single local Chromium browser; physical devices and other browser engines not tested."
+  ]
+}

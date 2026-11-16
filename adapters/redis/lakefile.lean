@@ -20,3 +20,6 @@ extern_lib weave_redis (pkg : NPackage __name__) := do
 
 lean_exe «weave-redis-test» where
   root := `test.Main
+
+lean_exe «weave-redis-pubsub-fixture» where
+  root := `test.PubSubFixture
