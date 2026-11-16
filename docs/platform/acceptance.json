@@ -69,7 +69,9 @@
         "test/browser_realtime.cjs"
       ],
       "evidence": [
-        "test/evidence/realtime-browser.json"
+        "test/evidence/realtime-browser.json",
+        "docs/platform/evidence/realtime-browser-repro.json",
+        "docs/platform/evidence/realtime-webkit-final.json"
       ],
       "scope_and_limits": "Typed server state and keyed HTML patches use independent view IDs bound to one stable HttpOnly browser-owner cookie. Real same-context tabs retain independent WebSocket state, and SSE fallback does not replace another view. Owner-wide revocation, per-owner/global capacity and CSRF/origin checks are exercised. State stays on its reactor owner; transparent cross-worker/node state migration is not implemented.",
       "verification": {
@@ -382,7 +384,7 @@
       "evidence": [
         "test/evidence/graphql-clients.json"
       ],
-      "scope_and_limits": "Typed query, ordered mutation, introspection and graphql-transport-ws subscription execution use cooperative AppM operations and local PubSub. Official GraphQL.js introspection/buildClientSchema/assertValidSchema and graphql-ws mutation broadcasts/completion are exercised. This bounded profile uses finite closed value objects, enums/scalars/arrays/nullability; nested fields project values rather than run independent asynchronous resolvers. Interfaces, unions, recursive named schemas, custom executable directives, SDL construction, APQ, defer/stream and federation are not implemented. Validation covers the selected operation. The previous official-client receipt must be refreshed after the final numeric-parser changes; final platform CI remains pending.",
+      "scope_and_limits": "Typed query, ordered mutation, introspection and graphql-transport-ws subscription execution use cooperative AppM operations and local PubSub. Official GraphQL.js introspection/buildClientSchema/assertValidSchema and graphql-ws mutation broadcasts/completion are exercised. This bounded profile uses finite closed value objects, enums/scalars/arrays/nullability; nested fields project values rather than run independent asynchronous resolvers. Interfaces, unions, recursive named schemas, custom executable directives, SDL construction, APQ, defer/stream and federation are not implemented. Validation covers the selected operation. The final numeric-parser changes are covered by current-source native/wire and official-client reruns; final platform CI remains pending.",
       "verification": {
         "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
         "platform_ci": "pending",
@@ -410,9 +412,10 @@
       "evidence": [
         "docs/platform/evidence/protocols-compile.json",
         "docs/platform/evidence/protocols-wire.json",
-        "docs/platform/evidence/grpc-web-browser.json"
+        "docs/platform/evidence/grpc-web-browser.json",
+        "docs/platform/evidence/grpc-web-webkit-final.json"
       ],
-      "scope_and_limits": "Native bounded proto3 parsing/code generation/codecs and unary, server-, client- and bidirectional-streaming RPCs interoperate with official grpcio/protobuf. Duplex output before request half-close,480 KB flow control, deadline/cancel, cardinality, framing and trailer errors are exercised. gRPC-Web binary/text unary and server streaming use real HTTP1/HTTP2 clients and an official browser client. The descriptor profile is self-contained; imported type resolution, proto2/editions/reflection and compressed messages are not implemented. Client/bidirectional streaming are native gRPC HTTP2 features, not a claim about the browser gRPC-Web protocol. Final source-bound wire/browser receipt refresh and platform CI are pending.",
+      "scope_and_limits": "Native bounded proto3 parsing/code generation/codecs and unary, server-, client- and bidirectional-streaming RPCs interoperate with official grpcio/protobuf. Duplex output before request half-close,480 KB flow control, deadline/cancel, cardinality, framing and trailer errors are exercised. gRPC-Web binary/text unary and server streaming use real HTTP1/HTTP2 clients and an official browser client. The descriptor profile is self-contained; imported type resolution, proto2/editions/reflection and compressed messages are not implemented. Client/bidirectional streaming are native gRPC HTTP2 features, not a claim about the browser gRPC-Web protocol. Current-source compile/wire and official browser client reruns pass in both Chromium and WebKit; final platform CI remains pending.",
       "verification": {
         "local_platform": "macOS arm64; actual native executables and the requirement-scoped clients/services identified by the linked reports",
         "platform_ci": "pending",
@@ -435,7 +438,9 @@
         "test/test_realtime.py"
       ],
       "evidence": [
-        "test/evidence/realtime-browser.json"
+        "test/evidence/realtime-browser.json",
+        "docs/platform/evidence/realtime-browser-repro.json",
+        "docs/platform/evidence/realtime-webkit-final.json"
       ],
       "scope_and_limits": "First-class SSE body, safe event fields, retry hints, keepalive, IDs, bounded replay and explicit replay-gap reset are implemented. Browser EventSource supplies reconnect mechanics; server Last-Event-ID handling is wire tested.",
       "verification": {
@@ -628,7 +633,9 @@
       "evidence": [
         "test/evidence/realtime-browser.json",
         "docs/platform/evidence/platform-compile.json",
-        "docs/platform/platform-result.json"
+        "docs/platform/platform-result.json",
+        "docs/platform/evidence/realtime-browser-repro.json",
+        "docs/platform/evidence/realtime-webkit-final.json"
       ],
       "scope_and_limits": "Typed csp! checks and per-response random nonce/header binding are enforced by a real browser. Context nonce and nonce-bearing CSP/report-only responses bypass response and request-fragment caching in either pipeline order, including Redis cache guards; regression tests cover both orders. Low-level explicit-key fragment caches remain caller responsibility. This is a CSP construction/enforcement feature, not a universal XSS-prevention guarantee for arbitrary application code.",
       "verification": {
@@ -710,7 +717,8 @@
         "scripts/test_protocol_compile.py"
       ],
       "evidence": [
-        "docs/platform/evidence/protocols-wire.json"
+        "docs/platform/evidence/protocols-wire.json",
+        "docs/platform/evidence/grpc-web-webkit-final.json"
       ],
       "scope_and_limits": "weave_api drives actual route definitions, checked handler input/output codecs and OpenAPI 3.1.1 JSON from one declaration, rejecting missing/colliding metadata and unrepresentable overlaps. A real native spec endpoint is exercised. Swagger page/bootstrap helpers use application-supplied hosted assets; a bundled Swagger distribution and arbitrary Lean type reflection are not implemented. Generated spec functionality is locally verified; publication of the final integrated API documentation remains pending.",
       "verification": {
@@ -744,13 +752,13 @@
       "required": "Build and publish doc-gen4 API docs from the final integrated platform revision; verify that the published new modules are present."
     },
     "final_receipt_refresh": {
-      "status": "pending",
+      "status": "locally_verified",
       "required": [
         "GraphQL native/wire and official GraphQL.js/graphql-ws clients after final numeric-parser changes",
         "Final source-bound protocol compile/wire and official gRPC-Web browser receipts",
         "Current multiview Live/CSP receipts in Chromium and WebKit"
       ],
-      "note": "Existing linked reports establish local feature behavior, but older receipts are not silently relabeled as final-source results. Delegated refresh is underway."
+      "note": "Completed: GraphQL unit and8real wire tests plus official GraphQL.js17.1/graphql-ws6.4.2; Stream/SSE/PubSub/Presence unit and7real wire tests; Live/CSP multiview and mixed fallback in Chromium158.0.8127.18 and WebKit27.2; protocol compile19, official grpcio/protobuf wire11, and6official gRPC-Web checks in each browser. Current source/runner/manifest digests and fixture hashes match. This does not substitute for final framework CI or publication."
     }
   },
   "cross_cutting_acceptance": [
@@ -795,7 +803,7 @@
         "maxExponentMagnitude": 1024,
         "configuration_hard_cap": 4096
       },
-      "scope_and_limits": "The preflight limits lexical mantissa/exponent digits, positive exponent expansion, effective decimal denominator and canonical formatting before Lean.Json.parse.1e1000000000 is rejected before expansion; 1.7e308 and 5e-324 round-trip. Numeric zero is normalized. Numeric-looking strings remain strings, with separate caller-specific decimal-string checks. Per-number compress/reparse closure does not waive independent whole-document byte/depth/node limits. JWT/audit replay/stored jobs-workflows/plugin headers/GraphQL numeric tokens/OTLP JSON use the shared guard."
+      "scope_and_limits": "The preflight limits lexical mantissa/exponent digits, positive exponent expansion, effective decimal denominator and canonical formatting before Lean.Json.parse. 1e1000000000 is rejected before expansion; 1.7e308 and 5e-324 round-trip. Numeric zero is normalized. Numeric-looking strings remain strings, with separate caller-specific decimal-string checks. Per-number compress/reparse closure does not waive independent whole-document byte/depth/node limits. JWT/audit replay/stored jobs-workflows/plugin headers/GraphQL numeric tokens/OTLP JSON use the shared guard."
     },
     {
       "feature": "Real owner-local dependency health and shutdown",
@@ -816,21 +824,26 @@
     "path": "docs/platform/acceptance-review.json",
     "note": "The independent review is historical input. Its stale/pending statements are superseded only where current source-bound reports or explicit current tests exist; its publication and supported-profile limits remain preserved."
   },
-  "evidence_freshness_at_merge": [
+  "refreshed_at_utc": "2026-11-16T16:26:39.969762+00:00",
+  "source_after_local_refresh": {
+    "head": "45c122f699ce8ad5f092f1658263c9f3addf1e7d",
+    "lean_net_revision": "dcce82480a6985b3269a474b12b81863e6bdb115",
+    "binding": "Current source/runner/manifest and native fixture digests are audited below. This records local verification, not the result of pending framework CI."
+  },
+  "evidence_freshness": [
     {
       "path": "docs/platform/platform-result.json",
       "recorded_source_hashes": 40,
-      "mismatches": [],
-      "note": "Current source manifest includes Generator, BodyBounds, MacroHygiene, ConfigTest and JSON-boundary tests."
-    },
-    {
-      "path": "docs/platform/health-result.json",
-      "recorded_source_hashes": 11,
       "mismatches": []
     },
     {
       "path": "docs/platform/external-result.json",
       "recorded_source_hashes": 14,
+      "mismatches": []
+    },
+    {
+      "path": "docs/platform/health-result.json",
+      "recorded_source_hashes": 11,
       "mismatches": []
     },
     {
@@ -855,19 +868,43 @@
     },
     {
       "path": "test/evidence/graphql-clients.json",
-      "recorded_source_hashes": 18,
-      "mismatches": [
-        "LeanWeave/GraphQL/Parser.lean",
-        "LeanWeave/GraphQL/ParserTest.lean",
-        "LeanWeave/Test/GraphQLMain.lean"
-      ],
-      "refresh": "pending"
+      "recorded_source_hashes": 26,
+      "mismatches": []
     },
     {
       "path": "test/evidence/realtime-browser.json",
-      "recorded_source_hashes": 5,
-      "mismatches": [],
-      "note": "Current multiview WebKit receipt; broader dependency binding and final Chromium/WebKit reruns pending."
+      "recorded_source_hashes": 24,
+      "mismatches": []
+    },
+    {
+      "path": "docs/platform/evidence/realtime-browser-repro.json",
+      "recorded_source_hashes": 24,
+      "mismatches": []
+    },
+    {
+      "path": "docs/platform/evidence/realtime-webkit-final.json",
+      "recorded_source_hashes": 24,
+      "mismatches": []
+    },
+    {
+      "path": "docs/platform/evidence/protocols-compile.json",
+      "recorded_source_hashes": 40,
+      "mismatches": []
+    },
+    {
+      "path": "docs/platform/evidence/protocols-wire.json",
+      "recorded_source_hashes": 40,
+      "mismatches": []
+    },
+    {
+      "path": "docs/platform/evidence/grpc-web-browser.json",
+      "recorded_source_hashes": 40,
+      "mismatches": []
+    },
+    {
+      "path": "docs/platform/evidence/grpc-web-webkit-final.json",
+      "recorded_source_hashes": 40,
+      "mismatches": []
     }
   ]
 }
