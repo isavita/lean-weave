@@ -17,7 +17,7 @@ private def app (worker : Nat) : IO Handler := do
   let cancellations ← IO.mkRef 0
   let calls ← IO.mkRef 0
   let cache ← Cache.Store.new
-  let cached := Cache.middleware cache {} (fun ctx => do
+  let cached := Cache.middleware cache { admit := some (fun ctx => pure (.cache ctx "public:cache")) } (fun ctx => do
     calls.modify (· + 1)
     let body := Lean.Json.mkObj [("host", Lean.toJson ctx.host), ("query", Lean.toJson ctx.query),
       ("locale", Lean.toJson ctx.locale), ("calls", Lean.toJson (← calls.get))]

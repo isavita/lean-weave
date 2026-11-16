@@ -24,6 +24,9 @@ def factory : Factory := fun worker => do
   let generations ← IO.mkRef 0
   let addWorker : Middleware := fun next ctx => next { ctx with attributes := ctx.attributes.push ("worker", toString worker) }
   router #[
-    ("GET", "/", "dashboard", pipeline #[addWorker, Cache.middleware responses { ttlMs := 2000 }] (dashboard fragments generations))]
+    ("GET", "/", "dashboard", pipeline #[addWorker, Cache.middleware responses {
+      ttlMs := 2000
+      admit := some (fun ctx => pure (.cache ctx "public:dashboard"))
+    }] (dashboard fragments generations))]
 
 end LeanWeave.Examples.Dashboard

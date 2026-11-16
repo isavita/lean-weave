@@ -28,10 +28,10 @@ def free_port():
 
 
 class Peer:
-    def __init__(self, test):
+    def __init__(self, test, path='/ws'):
         self.sock = socket.create_connection(('127.0.0.1', test.port), timeout=3)
         test.addCleanup(self.close)
-        self.sock.sendall(('GET /ws HTTP/1.1\r\nHost: localhost\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Protocol: graphql-transport-ws\r\nOrigin: ' + test.origin + '\r\n\r\n').encode())
+        self.sock.sendall(('GET ' + path + ' HTTP/1.1\r\nHost: localhost\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Protocol: graphql-transport-ws\r\nOrigin: ' + test.origin + '\r\n\r\n').encode())
         headers = b''
         while not headers.endswith(b'\r\n\r\n'): headers += self.sock.recv(1)
         test.assertIn(b'101', headers.split(b'\r\n')[0])
@@ -176,6 +176,25 @@ class GraphQLWire(unittest.TestCase):
         self.assertIsInstance(result['payload'], list)
         invalid.subscribe('ok','{counter{value}}')
         self.assertEqual(invalid.receive()['type'],'next'); self.assertEqual(invalid.receive()['type'],'complete')
+
+    def test_default_websocket_authorizer_denies_http1_and_http2(self):
+        mutation = {'type':'subscribe','id':'mutate','payload':{'query':'mutation{increment(amount:1){value}}'}}
+        peer = Peer(self, '/ws-default')
+        peer.sock.sendall(websocket_frame(1, b'{"type":"connection_init"}') +
+            websocket_frame(1, json.dumps(mutation).encode()))
+        self.assertEqual(peer.receive(), {'close':4403})
+
+        h2 = H2Client(self.port); self.addCleanup(h2.close)
+        h2.request(1,b'/ws-default',method=b'CONNECT',end_stream=False,headers=[
+            (b':protocol',b'websocket'),(b'sec-websocket-version',b'13'),
+            (b'sec-websocket-protocol',b'graphql-transport-ws'),(b'origin',self.origin.encode())])
+        h2.until(lambda: bool(h2.headers[1]))
+        self.assertIn((b':status',b'200'), h2.headers[1][0].headers)
+        h2.send(frame(0,0,1,websocket_frame(1,b'{"type":"connection_init","payload":{"token":"claimed"}}') +
+            websocket_frame(1,json.dumps(mutation).encode())))
+        h2.until(lambda: len(h2.bodies[1]) >= 4)
+        self.assertEqual(bytes(h2.bodies[1][:4]), bytes([0x88, 2]) + (4403).to_bytes(2,'big'))
+        self.assertEqual(self.http('{counter{value}}')[1]['data']['counter']['value'], 0)
 
     def test_cancel_awaiting_query_prevents_late_next_and_cleans_once(self):
         peer = Peer(self); peer.init()

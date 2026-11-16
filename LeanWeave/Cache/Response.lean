@@ -2,11 +2,25 @@ import LeanWeave.Cache.Store
 
 namespace LeanWeave.Cache
 
+/-- An access decision is distinct from a cache decision. Throw `AppError` to
+    reject a request; `bypass` still runs the handler with the checked context. -/
+inductive AdmissionResult where
+  | bypass (context : Context)
+  | cache (context : Context) (scope : String)
+
+/-- Runs on every request, including cache hits. It must complete every access
+    check relevant to this route before allowing lookup. A tenant-free public
+    route may explicitly use a global scope; tenant routes should include their
+    verified tenant in the scope. -/
+abbrev Admission := Context → AppM AdmissionResult
+
 /-- Only explicitly public responses in explicitly configured routes are cached. -/
 structure Policy where
   ttlMs : Nat := 10000
   vary : Array String := #["accept", "accept-language", "accept-encoding"]
   version : String := "1"
+  /-- No cache lookup is allowed until an explicit per-request admission runs. -/
+  admit : Option Admission := none
 
 private def tokens (s : String) : Array String :=
   (s.toLower.splitOn ",").toArray.map (fun p => p.trimAscii.toString)
@@ -47,6 +61,18 @@ def responseKey (ctx : Context) (policy : Policy) : String :=
     (ctx.attribute "tenant.config.revision").getD "", (ctx.attribute "tenant.config.variant").getD "",
     (ctx.attribute "feature.variant").getD ""] ++
     policy.vary.map (fun name => key #[name.toLower, rawHeaderKey ctx name]))
+
+private def admittedKey (scope : String) (ctx : Context) (policy : Policy) : String :=
+  key #["admitted:v1", scope, responseKey ctx policy]
+
+private def admitRequest (ctx : Context) (policy : Policy) : AppM AdmissionResult := do
+  let some admit := policy.admit | return .bypass ctx
+  let result ← admit ctx
+  let .cache ctx scope := result | return result
+  -- Admission scopes are application-owned, but still bounded before they
+  -- enter a worker-local lease table or a cache key.
+  if scope.isEmpty || scope.utf8ByteSize > 256 then return .bypass ctx
+  return .cache ctx scope
 
 /-- Dynamic tenant settings can tighten a route's TTL; the tenant revision and
 feature variant are also part of every response/fragment key. -/
@@ -125,9 +151,11 @@ def decodeResponse (bytes : ByteArray) : Option (Response × Nat) := do
 /-- Create once per worker. HEAD reuses the complete GET representation metadata.
     Miss contenders fail fast; they never form an unbounded waiter queue. -/
 def middleware (store : Store) (policy : Policy := {}) : Middleware := fun next ctx => do
+  let decision ← admitRequest ctx policy
+  let .cache ctx scope := decision | return ← next (match decision with | .bypass ctx => ctx | .cache ctx _ => ctx)
   let policy := effectivePolicy ctx policy
   if policy.ttlMs == 0 || !eligibleRequest ctx || policy.vary.any (fun name => (ctx.request.headers.filter (fun h => h.name.toLower == name.toLower)).size > 1) then return ← next ctx
-  let cacheKey := responseKey ctx policy
+  let cacheKey := admittedKey scope ctx policy
   if let some bytes ← store.get cacheKey (← IO.monoMsNow) then
     if let some (response, insertedAt) := decodeResponse bytes then
       if eligibleResponse policy response then
@@ -152,14 +180,16 @@ def middleware (store : Store) (policy : Policy := {}) : Middleware := fun next 
 
 /-- Context-aware fragment caching applies tenant rules and all response isolation
 keys. Low-level `fragment` remains available for explicit non-request keys. -/
-def requestFragment (store : Store) (ctx : Context) (name : String) (generate : AppM ByteArray)
+def requestFragment (store : Store) (ctx : Context) (name : String) (generate : Context → AppM ByteArray)
     (policy : Policy := {}) : AppM ByteArray := do
+  let decision ← admitRequest ctx policy
+  let .cache ctx scope := decision | return ← generate (match decision with | .bypass ctx => ctx | .cache ctx _ => ctx)
   let policy := effectivePolicy ctx policy
-  if !eligibleRequest ctx || policy.ttlMs == 0 then return ← generate
-  let cacheKey := key #["fragment", name, responseKey ctx policy]
+  if !eligibleRequest ctx || policy.ttlMs == 0 then return ← generate ctx
+  let cacheKey := key #["fragment", name, admittedKey scope ctx policy]
   if ctx.request.method == "HEAD" then
     if let some bytes ← store.get cacheKey (← IO.monoMsNow) then return bytes
-    return ← generate
-  fragment store cacheKey policy.ttlMs generate
+    return ← generate ctx
+  fragment store cacheKey policy.ttlMs (generate ctx)
 
 end LeanWeave.Cache
