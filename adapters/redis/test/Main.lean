@@ -2,6 +2,12 @@ import LeanWeaveRedis
 
 open LeanWeave LeanWeave.Redis
 
+private def publicPolicy : Cache.Policy :=
+  { admit := some (fun ctx => pure (.cache ctx "public:redis:test")) }
+
+private def admittedResponseKey (ctx : Context) : String :=
+  Cache.key #["admitted:redis:v1", "public:redis:test", Cache.responseKey ctx publicPolicy]
+
 private def check (condition : Bool) (message : String) : IO Unit :=
   unless condition do throw (IO.userError message)
 
@@ -49,11 +55,31 @@ private def cachedResponses (client : Client) : IO Unit := do
   let origin : Handler := fun _ => do
     calls.modify (· + 1)
     return (Response.text s!"render:{← calls.get}").withHeader "cache-control" "public, max-age=10"
-  let handler := middleware client {} origin
+  let handler := middleware client publicPolicy origin
   let ctx ← context "/cached"
   let first ← value (handler ctx)
   let second ← value (handler ctx)
   check (first.body == second.body && (← calls.get) == 1) "Redis response cache missed public fill"
+  let defaultCalls ← IO.mkRef (0 : Nat)
+  let defaultHandler := middleware client {} (fun _ => do
+    defaultCalls.modify (· + 1)
+    return (Response.text "default").withHeader "cache-control" "public")
+  let defaultCtx ← context "/no-admission"
+  let _ ← value (defaultHandler defaultCtx)
+  let _ ← value (defaultHandler defaultCtx)
+  check ((← defaultCalls.get) == 2) "Redis default policy must bypass cache without admission"
+  let allowed ← IO.mkRef true
+  let accessPolicy : Cache.Policy := { admit := some (fun c => do
+    unless ← allowed.get do throw { status := 403, message := "access revoked" }
+    return .cache c "public:redis:access") }
+  let accessHandler := middleware client accessPolicy (fun _ =>
+    pure ((Response.text "access").withHeader "cache-control" "public, max-age=10"))
+  let accessCtx ← context "/recheck-access"
+  let _ ← value (accessHandler accessCtx)
+  allowed.set false
+  check (match ← drive (accessHandler accessCtx) with
+    | .error error => error.status == 403
+    | .ok _ => false) "Redis admission must recheck access before a cache hit"
   let tag := first.getHeader "etag"
   let conditional := { ctx with request := { ctx.request with
     headers := ctx.request.headers.push { name := "if-none-match", value := tag.getD "" |>.toUTF8 } } }
@@ -69,7 +95,7 @@ private def cachedResponses (client : Client) : IO Unit := do
   let authenticated ← context "/cached" "one.test" #[{ name := "authorization", value := "secret".toUTF8 }]
   let _ ← value (handler authenticated)
   check ((← calls.get) == 5) "Redis host/tenant/locale/auth cache isolation failed"
-  for marker in #["private", "no-store", "set-cookie", "vary-star"] do
+  for marker in #["private", "no-store", "set-cookie", "vary-star", "vary-unknown"] do
     let privateCalls ← IO.mkRef (0 : Nat)
     let origin : Handler := fun _ => do
       privateCalls.modify (· + 1)
@@ -78,8 +104,9 @@ private def cachedResponses (client : Client) : IO Unit := do
         | "private" => response.withHeader "cache-control" "private"
         | "no-store" => response.withHeader "cache-control" "public, no-store"
         | "set-cookie" => response.withHeader "set-cookie" "session=opaque"
+        | "vary-unknown" => response.withHeader "vary" "X-Device"
         | _ => response.withHeader "vary" "*"
-    let handler := middleware client {} origin
+    let handler := middleware client publicPolicy origin
     let ctx ← context ("/" ++ marker)
     let _ ← value (handler ctx)
     let _ ← value (handler ctx)
@@ -88,8 +115,8 @@ private def cachedResponses (client : Client) : IO Unit := do
   let build : AppM ByteArray := do
     fragments.modify (· + 1)
     return "fragment".toUTF8
-  let _ ← value (fragment client ctx "component" build)
-  let _ ← value (fragment client ctx "component" build)
+  let _ ← value (fragment client ctx "component" build publicPolicy)
+  let _ ← value (fragment client ctx "component" build publicPolicy)
   check ((← fragments.get) == 1) "Redis fragment cache missed fill"
   -- Invalidate while a producer is suspended. Its stale token must not publish.
   let entered ← IO.mkRef false
@@ -101,20 +128,20 @@ private def cachedResponses (client : Client) : IO Unit := do
       return none) (fun _ => pure ())
     return (Response.text "stale-fill").withHeader "cache-control" "public"
   let ctx ← context "/invalidate-in-flight"
-  let execution ← AppM.execute ((middleware client {} origin) ctx) 131072
+  let execution ← AppM.execute ((middleware client publicPolicy origin) ctx) 131072
   for _ in [:1000] do
     let _ ← execution.poll
     if ← entered.get then break
     IO.sleep 1
   check (← entered.get) "cache producer never suspended"
-  let _ ← value (client.delete (Cache.responseKey ctx {}))
+  let _ ← value (client.delete (admittedResponseKey ctx))
   ready.set true
   let mut finished := false
   for _ in [:1000] do
     if (← execution.poll).isSome then finished := true; break
     IO.sleep 1
   check finished "invalidated producer failed to complete"
-  check ((← value (client.get (Cache.responseKey ctx {}))).isNone) "invalidated producer repopulated Redis"
+  check ((← value (client.get (admittedResponseKey ctx))).isNone) "invalidated producer repopulated Redis"
 
 def main (args : List String) : IO Unit := do
   protocol

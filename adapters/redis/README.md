@@ -32,7 +32,9 @@ def app (_worker : Nat) : IO Handler := do
   let redis ← Redis.Client.new { namespacePrefix := "myapp:production:" }
   let origin : Handler := fun _ =>
     pure ((Response.text "dashboard").withHeader "cache-control" "public, max-age=5")
-  return Redis.middleware redis {} origin
+  let policy : Cache.Policy := {
+    admit := some (fun ctx => pure (.cache ctx "public:dashboard")) }
+  return Redis.middleware redis policy origin
 
 def main : IO Unit :=
   Server.serve app { appRetainedBytes := 131072 }
@@ -59,8 +61,13 @@ cache helper methods convert them into AppError 503.
 
 `Redis.middleware client policy` caches explicitly public GET responses using
 the core host/tenant/route/path/query/locale/Vary key and strict eligibility
-checks. Authenticated/session/cookie traffic, private/no-store responses,
-Set-Cookie, Vary:* and unsupported Vary dimensions bypass storage. HEAD reuses
+checks. The `policy.admit` callback runs on every request, including hits; its
+verified scope enters the key. The default policy bypasses caching. Complete
+tenant resolution, authentication, authorization and feature checks before
+returning `.cache`; use a verified tenant scope for tenant routes.
+Authenticated/session/cookie traffic, private/no-store responses,
+Set-Cookie, Vary:* and Vary dimensions outside `policy.vary` bypass storage.
+The Redis adapter does not maintain a dynamic Vary variant index. HEAD reuses
 GET metadata without filling on a miss. ETags and If-None-Match reuse the core
 conditional response logic. Oversized fills bypass storage. `Redis.fragment`
 provides the same public request isolation for named component bytes.

@@ -285,6 +285,41 @@ def conditional (ctx : Context) (response : Response) : Response :=
       if tagMatches then { response with status := 304, body := ByteArray.empty }
       else response
 
+-- Redis's optional adapter persists complete response envelopes. The worker-
+-- local ResponseStore does not call these functions or copy body bytes.
+private def u32 (n : Nat) : ByteArray :=
+  ByteArray.mk #[(n / 16777216).toUInt8, (n / 65536).toUInt8, (n / 256).toUInt8, n.toUInt8]
+
+private def read32 (bytes : ByteArray) (offset : Nat) : Option Nat :=
+  if offset + 4 > bytes.size then none else
+    some ((bytes[offset]!.toNat * 256 + bytes[offset+1]!.toNat) * 65536 +
+      bytes[offset+2]!.toNat * 256 + bytes[offset+3]!.toNat)
+
+def encodeResponse (response : Response) (now : Nat) : ByteArray := Id.run do
+  let mut bytes := u32 (now / 4294967296) ++ u32 now ++ u32 response.headers.size
+  for header in response.headers do
+    let name := header.name.toUTF8
+    bytes := bytes ++ u32 name.size ++ u32 header.value.size ++ name ++ header.value
+  return bytes ++ response.body
+
+def decodeResponse (bytes : ByteArray) : Option (Response × Nat) := do
+  let high ← read32 bytes 0
+  let low ← read32 bytes 4
+  let count ← read32 bytes 8
+  if count > 1000 then none else do
+    let mut cursor := 12
+    let mut headers : Array LeanNet.HTTP1.Header := #[]
+    for _ in [:count] do
+      let nameSize ← read32 bytes cursor
+      let valueSize ← read32 bytes (cursor + 4)
+      cursor := cursor + 8
+      if cursor + nameSize + valueSize > bytes.size then none else do
+        let name ← String.fromUTF8? (bytes.extract cursor (cursor + nameSize))
+        let value := bytes.extract (cursor + nameSize) (cursor + nameSize + valueSize)
+        headers := headers.push { name, value }
+        cursor := cursor + nameSize + valueSize
+    return ({ headers, body := bytes.extract cursor bytes.size }, high * 4294967296 + low)
+
 private def lookupVariant (store : ResponseStore) (ctx : Context)
     (base : CacheKey) : IO (Option CacheEntry) :=
   store.lookupMatching base (fun entry =>
