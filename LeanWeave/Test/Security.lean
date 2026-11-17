@@ -23,6 +23,254 @@ private def status (handler : Handler) (context : Context) : IO Nat := do
   | .ok response => return response.status
   | .error _ => return 0
 
+private def responseStoreTests : IO Unit := do
+  let context ← ctx
+  let cacheNow ← IO.monoMsNow
+  let keyA := Cache.CacheKey.ofParts #["slru", "a"]
+  let keyB := Cache.CacheKey.ofParts #["slru", "b"]
+  let keyC := Cache.CacheKey.ofParts #["slru", "c"]
+  let keyD := Cache.CacheKey.ofParts #["slru", "d"]
+  let keyE := Cache.CacheKey.ofParts #["slru", "e"]
+  let mkEntry := fun (base : Cache.CacheKey) (body : ByteArray) (storedAt : Nat) (ttlMs : Nat) =>
+    ({ status := 200, headers := #[], body, ttlMs, storedAt, baseKey := base,
+       varyNames := #[], varyFingerprint := Cache.CacheKey.ofParts #[] } : Cache.CacheEntry)
+  let slruLimits : Cache.ResponseLimits := { maxEntries := 3, maxBytes := 4096, maxEntryBytes := 1024, protectedPercent := 34 }
+  let slru ← Cache.ResponseStore.new slruLimits
+  check (← slru.storeChecked keyA (mkEntry keyA "A".toUTF8 cacheNow 60000)) "SLRU first insert"
+  check ((← slru.lookup keyA).isSome) "SLRU promotes a hot entry"
+  for key in #[keyB, keyC, keyD, keyE] do
+    check (← slru.storeChecked key (mkEntry key "cold".toUTF8 cacheNow 60000)) "SLRU cold insert"
+  check ((← slru.lookup keyA).isSome) "SLRU protects hot entry from cold scan"
+  let mut live := 0
+  for key in #[keyA, keyB, keyC, keyD, keyE] do
+    if (← slru.lookup key).isSome then live := live + 1
+  check (live <= 3) "response store hard item count"
+  let slruStats ← slru.stats
+  check (slruStats.entries <= 3 && slruStats.bytes <= 4096) "SLRU enforces count and byte bounds"
+  let tiny ← Cache.ResponseStore.new { maxEntries := 10, maxBytes := 700, maxEntryBytes := 700 }
+  let largeBody := ByteArray.mk (Array.replicate 220 65)
+  check (← tiny.storeChecked keyA (mkEntry keyA largeBody cacheNow 60000)) "response store bounded first byte insert"
+  let _ ← tiny.storeChecked keyB (mkEntry keyB largeBody cacheNow 60000)
+  check (!((← tiny.lookup keyA).isSome && (← tiny.lookup keyB).isSome)) "response store hard byte limit"
+  check ((← tiny.stats).bytes <= 700) "response store reports bounded owned bytes"
+  check (!(← tiny.storeChecked keyC (mkEntry keyC (ByteArray.mk (Array.replicate 600 65)) cacheNow 60000))) "oversize response rejected"
+  let expired ← Cache.ResponseStore.new
+  check (← expired.storeChecked keyA (mkEntry keyA "old".toUTF8 (← IO.monoMsNow) 20)) "short-lived response stored"
+  IO.sleep 30
+  check ((← expired.lookup keyA).isNone) "expired response never served"
+  let isolated ← Cache.ResponseStore.new
+  check ((← isolated.lookup keyA).isNone) "worker-local response stores remain independent"
+  let coalescedStore ← Cache.ResponseStore.new { maxInFlight := 1, maxWaitersPerKey := 9, maxWaiters := 9 }
+  let ready ← IO.mkRef false
+  let backendCalls ← IO.mkRef 0
+  let slowBackend : Handler := fun _ => do
+    backendCalls.modify (· + 1)
+    AppM.await
+      (do
+        if ← ready.get then
+          return some (.ok ((Response.text "one generation").withHeader "cache-control" "public, max-age=30"))
+        return none)
+      (fun _ => pure ()) 10000
+  let coalesced := Cache.middleware coalescedStore {
+    admit := some (fun c => pure (.cache c "public:coalescing")) } slowBackend
+  let executions ← (Array.range 10).mapM (fun _ => AppM.execute (coalesced context))
+  check ((← backendCalls.get) == 1) "ten misses start one backend request"
+  let pendingStats ← coalescedStore.stats
+  check (pendingStats.inFlight == 1 && pendingStats.waiters == 9) "coalescing registers nine bounded followers"
+  ready.set true
+  for execution in executions do
+    match ← execution.poll with
+    | some (.ok response) => check (response.body == "one generation".toUTF8) "coalesced response reused"
+    | _ => throw (IO.userError "coalesced response did not complete")
+  check ((← backendCalls.get) == 1) "ten coalesced requests share the first fill"
+  let finishedStats ← coalescedStore.stats
+  check (finishedStats.inFlight == 0 && finishedStats.waiters == 0 && finishedStats.pinnedBytes == 0) "coalescing releases all waiter and pin budgets"
+  let cancellationStore ← Cache.ResponseStore.new { maxInFlight := 1, maxWaitersPerKey := 2, maxWaiters := 2 }
+  let release ← IO.mkRef false
+  let cancelCalls ← IO.mkRef 0
+  let cancelledBackend : Handler := fun _ => do
+    cancelCalls.modify (· + 1)
+    AppM.await
+      (do
+        if ← release.get then
+          return some (.ok ((Response.text "survived").withHeader "cache-control" "public, max-age=30"))
+        return none)
+      (fun _ => pure ()) 10000
+  let cancellable := Cache.middleware cancellationStore {
+    admit := some (fun c => pure (.cache c "public:cancellation")) } cancelledBackend
+  let active ← (Array.range 3).mapM (fun _ => AppM.execute (cancellable context))
+  let some follower := active[1]? | throw (IO.userError "missing coalesced follower")
+  follower.cancel .disconnected
+  check ((← cancellationStore.stats).waiters == 1) "disconnect releases only its follower slot"
+  release.set true
+  let some leader := active[0]? | throw (IO.userError "missing coalesced leader")
+  let some survivor := active[2]? | throw (IO.userError "missing surviving follower")
+  check (match ← leader.poll with | some (.ok response) => response.body == "survived".toUTF8 | _ => false) "leader completes after follower cancellation"
+  check (match ← survivor.poll with | some (.ok response) => response.body == "survived".toUTF8 | _ => false) "remaining follower completes after cancellation"
+  check ((← cancelCalls.get) == 1) "follower cancellation does not restart backend"
+  check (match ← (cancellable context).run with | .ok response => response.body == "survived".toUTF8 | _ => false) "later lookup reuses completed fill"
+  check ((← cancellationStore.stats).waiters == 0) "cancellation leaves no pinned waiter"
+  let invalidating ← Cache.ResponseStore.new
+  let invalidationKey := Cache.CacheKey.ofParts #["invalidate", "flight"]
+  let .leader pendingFlight ← invalidating.claim invalidationKey |
+    throw (IO.userError "expected initial flight leader")
+  let .follower waitingFlight ← invalidating.claim invalidationKey |
+    throw (IO.userError "expected invalidation follower")
+  let waiting ← AppM.execute (invalidating.wait waitingFlight 1000)
+  invalidating.invalidateBase invalidationKey
+  check (match ← waiting.poll with | some (.ok none) => true | _ => false) "invalidation wakes a suspended follower"
+  check (!(← invalidating.finish pendingFlight (some (mkEntry invalidationKey "stale".toUTF8 (← IO.monoMsNow) 60000)))) "late invalidated producer cannot publish"
+  let invalidatedStats ← invalidating.stats
+  check (invalidatedStats.inFlight == 0 && invalidatedStats.waiters == 0 && invalidatedStats.pinnedBytes == 0) "invalidation releases flight accounting"
+  let pinnedStore ← Cache.ResponseStore.new
+  let pinnedKey := Cache.CacheKey.ofParts #["invalidate", "pinned"]
+  let .leader pinnedLeader ← pinnedStore.claim pinnedKey |
+    throw (IO.userError "expected pinned flight leader")
+  let .follower pinnedFollower ← pinnedStore.claim pinnedKey |
+    throw (IO.userError "expected pinned flight follower")
+  let pinnedWait ← AppM.execute (pinnedStore.wait pinnedFollower 1000)
+  let pinnedEntry := mkEntry pinnedKey "old generation".toUTF8 (← IO.monoMsNow) 60000
+  check (← pinnedStore.storeChecked pinnedKey pinnedEntry) "pinned flight entry stored"
+  check (← pinnedStore.finish pinnedLeader (some pinnedEntry)) "pinned flight published"
+  check ((← pinnedStore.stats).pinnedBytes > 0) "completed flight holds a bounded response for waiters"
+  pinnedStore.invalidateBase pinnedKey
+  check (match ← pinnedWait.poll with | some (.ok none) => true | _ => false) "invalidation hides a pinned old generation"
+  check ((← pinnedStore.lookup pinnedKey).isNone && (← pinnedStore.stats).pinnedBytes == 0) "pinned response released after invalidation"
+
+private def responseGateRegressionTests : IO Unit := do
+  let context ← ctx "/cache-regression"
+  let calls ← IO.mkRef 0
+  let backend : Handler := fun _ => do
+    calls.modify (· + 1)
+    pure ((Response.text (toString (← calls.get))).withHeader "cache-control" "public, max-age=30")
+  let responseStore ← Cache.ResponseStore.new
+  let sanitize : Cache.Admission := fun incoming => do
+    let filtered := incoming.request.headers.filter
+      (fun h => h.name.toLower != "authorization" && h.name.toLower != "cookie")
+    let sanitized := { incoming with
+      authenticated := false
+      sessionId := none
+      request := { incoming.request with headers := filtered } }
+    return .cache sanitized "public:sanitized"
+  let guarded := Cache.middleware responseStore { admit := some sanitize } backend
+  let _ ← ok (← (guarded context).run)
+  let protectedCtx := { context with authenticated := true, sessionId := some "secret" }
+  let authorized := { context with request := { context.request with
+    headers := context.request.headers.push (header "authorization" "Bearer secret") } }
+  let cookied := { context with request := { context.request with
+    headers := context.request.headers.push (header "cookie" "sid=secret") } }
+  for input in #[protectedCtx, authorized, cookied] do
+    let _ ← ok (← (guarded input).run)
+  check ((← calls.get) == 4) "original auth and cookie state bypasses cache after admission changes"
+  for name in #["range", "if-range", "if-match", "if-unmodified-since", "if-modified-since",
+      "cache-control", "pragma"] do
+    let value := if name == "range" then "bytes=0-1"
+      else if name == "cache-control" then "max-age=1"
+      else if name == "pragma" then "no-cache"
+      else "example"
+    let input := { context with request := { context.request with
+      headers := context.request.headers.push (header name value) } }
+    check (!Cache.eligibleRequest input) s!"{name} request bypasses unsupported cache semantics"
+  let minFresh := { context with request := { context.request with
+    headers := context.request.headers.push (header "cache-control" "min-fresh=60") } }
+  let spacedMaxAge := { context with request := { context.request with
+    headers := context.request.headers.push (header "cache-control" "max-age = 0") } }
+  let bodyGet := { context with request := { context.request with body := "a=1".toUTF8 } }
+  check (!Cache.eligibleRequest minFresh && !Cache.eligibleRequest spacedMaxAge && !Cache.eligibleRequest bodyGet)
+    "request max-age, min-fresh and GET bodies bypass response cache"
+  let rangeCtx := { context with request := { context.request with
+    headers := context.request.headers.push (header "range" "bytes=0-1") } }
+  for input in #[minFresh, bodyGet, rangeCtx] do
+    let _ ← ok (← (guarded input).run)
+  check ((← calls.get) == 7) "unsupported request semantics bypass a seeded cache"
+
+  let nowUnixMs := (← Std.Time.Timestamp.now).toMillisecondsSinceUnixEpoch.val
+  let oldDate := LeanNet.HTTP.Static.formatHttpDate (nowUnixMs / 1000 - 7200)
+  let yesterday := (Response.text "old").withHeader "cache-control" "public, max-age=3600"
+  let yesterday := { yesterday with headers := yesterday.headers.push { name := "date", value := oldDate } }
+  check ((Cache.freshnessAt? {} yesterday nowUnixMs 0).map Prod.fst == some 0)
+    "old Date exhausts max-age even without Age"
+  let spacedLifetime := (Response.text "x").withHeader "cache-control" "public, max-age = 0"
+  check ((Cache.freshnessAt? {} spacedLifetime nowUnixMs 0).map Prod.fst == some 0)
+    "optional whitespace cannot hide zero max-age"
+  let badAge := yesterday.withHeader "age" "bogus"
+  check ((Cache.freshnessAt? {} badAge nowUnixMs 0).isNone) "invalid Age bypasses storage"
+  let duplicateAge := { yesterday with headers := yesterday.headers ++ #[header "age" "1", header "age" "2"] }
+  check ((Cache.freshnessAt? {} duplicateAge nowUnixMs 0).isNone) "duplicate Age bypasses storage"
+  let pastExpires := LeanNet.HTTP.Static.formatHttpDate (nowUnixMs / 1000 - 60)
+  let expiring := (Response.text "expired").withHeader "cache-control" "public"
+  let expiring := { expiring with headers := expiring.headers.push { name := "expires", value := pastExpires } }
+  check ((Cache.freshnessAt? {} expiring nowUnixMs 0).map Prod.fst == some 0)
+    "past Expires cannot be extended by route TTL"
+
+  let datedCalls ← IO.mkRef 0
+  let datedStore ← Cache.ResponseStore.new
+  let dated := Cache.middleware datedStore { admit := some (fun c => pure (.cache c "public:dated")) }
+    (fun _ => do
+      datedCalls.modify (· + 1)
+      let now := (← Std.Time.Timestamp.now).toSecondsSinceUnixEpoch.val
+      let response := (Response.text (toString (← datedCalls.get))).withHeader "cache-control" "public, max-age=30"
+      let response := response.withHeader "age" "0"
+      let dateHeader : LeanNet.HTTP1.Header :=
+        { name := "date", value := LeanNet.HTTP.Static.formatHttpDate (now - 6) }
+      pure { response with headers := response.headers.push dateHeader })
+  let firstDated ← ok (← (dated context).run)
+  let secondDated ← ok (← (dated context).run)
+  check (firstDated.body == secondDated.body && (← datedCalls.get) == 1 &&
+    ((secondDated.getHeader "age").bind String.toNat?).getD 0 >= 5)
+    "Date apparent age is reported on a cache hit"
+
+  let ttlCalls ← IO.mkRef 0
+  let ttlStore ← Cache.ResponseStore.new
+  let ttlHandler := Cache.middleware ttlStore {
+    ttlMs := 30000
+    admit := some (fun c => pure (.cache c "public:ttl-reduction")) }
+    (fun _ => do
+      ttlCalls.modify (· + 1)
+      pure ((Response.text (toString (← ttlCalls.get))).withHeader "cache-control" "public, max-age=30"))
+  let _ ← ok (← (ttlHandler context).run)
+  IO.sleep 15
+  let reduced := { context with attributes := context.attributes.push ("tenant.cache.ttlMs", "1") }
+  let _ ← ok (← (ttlHandler reduced).run)
+  check ((← ttlCalls.get) == 2) "runtime TTL reduction rejects an older response"
+
+  let varyStore ← Cache.ResponseStore.new
+  let varyCalls ← IO.mkRef 0
+  let ready ← IO.mkRef false
+  let varying : Handler := fun request => do
+    varyCalls.modify (· + 1)
+    let count ← varyCalls.get
+    AppM.await
+      (do
+        if ← ready.get then
+          let result := (Response.text s!"{(request.header "x-device").getD "none"}:{count}").withHeader
+            "cache-control" "public, max-age=30"
+          return some (.ok (result.withHeader "vary" "X-Device"))
+        return none)
+      (fun _ => pure ()) 10000
+  let varyingCache := Cache.middleware varyStore {
+    admit := some (fun c => pure (.cache c "public:mixed-variants")) } varying
+  let device := fun (name id : String) => { context with request := { context.request with
+    headers := context.request.headers ++ #[header "x-device" name, header "x-request-id" id] } }
+  let requests := #[device "desktop" "one", device "desktop" "two",
+    device "mobile" "three", device "mobile" "four"]
+  let executions ← requests.mapM (fun request => AppM.execute (varyingCache request))
+  check ((← varyCalls.get) == 1) "unrelated request headers share one cold base flight"
+  ready.set true
+  let mut bodies : Array ByteArray := #[]
+  for execution in executions do
+    let mut completed : Option Response := none
+    for _ in [:10] do
+      if completed.isSome then break
+      if let some result ← execution.poll then completed := some (← ok result)
+    let some response := completed | throw (IO.userError "mixed Vary follower did not complete")
+    bodies := bodies.push response.body
+  check (bodies[0]! == bodies[1]! && bodies[2]! == bodies[3]! && bodies[0]! != bodies[2]! &&
+    (← varyCalls.get) == 2) "cold mixed Vary requests produce one fill per variant"
+  let mobileHit ← ok (← (varyingCache (device "mobile" "new-id")).run)
+  check (mobileHit.body == bodies[2]! && (← varyCalls.get) == 2)
+    "newly discovered Vary variant is stored for later requests"
+
 /-- Hostile input and isolation checks for middleware, decoders, sessions and caches. -/
 def securityTests : IO Unit := do
   check ((Body.form "a=1&a=2".toUTF8).toOption.map (·.size) == some 2) "form preserves duplicate fields"
@@ -121,7 +369,7 @@ def securityTests : IO Unit := do
   let generating : Handler := fun _ => do
     calls.modify (· + 1)
     pure ((Response.text "public").withHeader "cache-control" "public, max-age=30")
-  let responses ← Cache.Store.new
+  let responses ← Cache.ResponseStore.new
   let cached := Cache.middleware responses { admit := some (fun ctx => pure (.cache ctx "public:test")) } generating
   let first ← ok (← (cached context).run)
   let second ← ok (← (cached context).run)
@@ -139,13 +387,13 @@ def securityTests : IO Unit := do
   let tenantHeader := fun (name : String) => { context with request := { context.request with headers := context.request.headers.push (header "x-tenant-id" name) } }
   let alphaCtx := tenantHeader "alpha"
   let betaCtx := tenantHeader "beta"
-  let unsafeStore ← Cache.Store.new
+  let unsafeStore ← Cache.ResponseStore.new
   let unsafeOrder := Cache.middleware unsafeStore {} (Tenant.middleware (Tenant.fromHeader) (fun _ _ => pure true) tenantBody)
   let unsafeAlpha ← ok (← (unsafeOrder alphaCtx).run)
   let unsafeBeta ← ok (← (unsafeOrder betaCtx).run)
   check (unsafeAlpha.body != unsafeBeta.body && (← status unsafeOrder context) == 404) "unadmitted outer cache cannot bypass tenant resolution"
-  check ((← unsafeStore.state.get).entries.isEmpty) "default cache policy never stores before admission"
-  let admittedStore ← Cache.Store.new
+  check ((← unsafeStore.stats).entries == 0) "default cache policy never stores before admission"
+  let admittedStore ← Cache.ResponseStore.new
   let access ← IO.mkRef true
   let admitted := Cache.middleware admittedStore { admit := some (fun c => do
     let some resolution ← Tenant.fromHeader "x-tenant-id" c | throw { status := 404, message := "tenant not found" }
@@ -180,14 +428,27 @@ def securityTests : IO Unit := do
       { context with request := { context.request with headers := context.request.headers.push (header "authorization" "Bearer x") } },
       { context with request := { context.request with headers := context.request.headers.push (header "cookie" "a=b") } } ] do
     check (!Cache.eligibleRequest other) "auth/session cache bypass"
-  for extra in [header "set-cookie" "a=b", header "vary" "*", header "cache-control" "private", header "cache-control" "no-store"] do
+  for extra in [header "set-cookie" "a=b", header "vary" "*", header "cache-control" "private",
+      header "cache-control" "no-store", header "connection" "close",
+      header "transfer-encoding" "chunked", header "content-range" "bytes 0-1/10"] do
     check (!Cache.eligibleResponse {} { first with headers := first.headers.push extra }) "private response bypass including duplicate header fields"
+  check (!Cache.eligibleResponse {} ((Response.text "x").withHeader "cache-control" "public=foo, max-age=30"))
+    "public requires a bare cache-control directive"
   check (!Cache.eligibleResponse {} { first with headers := first.headers.push { name := "set-cookie", value := ByteArray.mk #[255] } }) "opaque Set-Cookie bypass"
+  check (Cache.parseVary #[header "Vary" " X-Device , Accept-Encoding ", header "vary" "x-device"] ==
+    some #["accept-encoding", "x-device"]) "Vary merges case-insensitive field names without changing headers"
+  for invalid in #[header "vary" "*", header "vary" "X-Device,", header "vary" "X Device",
+      header "vary" "", { name := "vary", value := ByteArray.mk #[255] }] do
+    check ((Cache.parseVary #[invalid]).isNone) "malformed or opaque Vary rejected"
+    check (!Cache.eligibleResponse {} { first with headers := first.headers.push invalid }) "malformed Vary bypasses cache"
+  check (Cache.CacheKey.ofByteParts #[ByteArray.empty] != Cache.CacheKey.ofByteParts #[]) "key distinguishes absent from empty fields"
+  check (Cache.CacheKey.ofByteParts #[ByteArray.mk #[255]] != Cache.CacheKey.ofByteParts #["�".toUTF8]) "opaque key bytes are preserved"
   check (Cache.freshnessMs {} ((Response.text "x").withHeader "cache-control" "public, max-age=0") == 0) "zero freshness not cached"
   check ((Cache.conditional conditional (Response.text "oops" 500)).status == 500) "conditional error cannot become 304"
-  check (← responses.acquire "work") "cache miss lease"
-  check (!(← responses.acquire "work")) "stampede prevention"
-  responses.release "work"
+  let leases ← Cache.Store.new
+  check (← leases.acquire "work") "fragment cache miss lease"
+  check (!(← leases.acquire "work")) "fragment stampede prevention"
+  leases.release "work"
   let ready ← IO.mkRef false
   let fragments ← Cache.Store.new
   let job ← AppM.execute (Cache.fragment fragments "f" 1000 (AppM.await
@@ -202,6 +463,8 @@ def securityTests : IO Unit := do
   let pending ← AppM.execute (Cache.fragment fragments "cancel" 1000 (AppM.await (pure none) (fun _ => pure ()) 10000))
   pending.cancel .disconnected
   check ((← fragments.state.get).inFlight.isEmpty) "cache lease released on cancellation"
+  responseStoreTests
+  responseGateRegressionTests
   IO.println "security/cache/session/body checks passed"
 
 end LeanWeave.Test
