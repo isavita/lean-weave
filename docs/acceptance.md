@@ -81,6 +81,13 @@ new `response_middleware_request` sample also constructs the middleware action
 on every iteration from an already decoded context. It measured 15,640 ns/op
 and 128 small allocations/op in the same comparison.
 
+`multipart_upload_512_kib` decodes a complete request body with one 512 KiB
+binary part. The benchmark limits this sample to 100 iterations. In three
+paired Apple M2 runs, with only the body parser replaced in the same native
+benchmark, median time fell from 59.07 ms to 0.785 ms per upload. Lean small
+allocations increased from 63.02 to 66.02 per upload. These counters exclude
+the native arrays removed from each delimiter search step.
+
 ## Network microbenchmark
 
 Build `weave-pages` using the command above, then run the existing executable:
