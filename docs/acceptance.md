@@ -60,23 +60,26 @@ These counts must not be described as total allocations or memory consumption.
 
 Samples warm up literal initialization and measure compiled HTML, full
 path/query decode plus typed route/render, fragment-cache hits, direct response
-store hits with one or 1,024 seeded keys, and full response middleware hits. Each result
+store hits with one or 1,024 seeded keys, and response middleware hits. Each result
 feeds a checksum so work remains observable. These are single-process core
 microbenchmarks, not production throughput, TLS, HTTP/2 network latency or a
 comparison against another framework. Run on controlled hardware and repeat
 samples for comparisons; CI uploads measurements without flaky timing thresholds.
 
-A five-run comparison on Apple M2 with 50,000 iterations per run measured the
-following small allocations per operation. Both revisions used the same
-benchmark workload and Lean 4.35.0. This comparison uses allocation counts
-because other builds on the host made wall times noisy.
+A paired Apple M2 sample used the median of three 50,000-iteration runs per
+version, with Lean 4.35.0 and the same workloads.
 
-| Sample | Cache PR before review (`319505b`) | After review |
-| --- | ---: | ---: |
-| Decode, route, and render | 95.89 | 68.56 |
-| Direct response lookup, one key | 15.00 | 3.00 |
-| Direct response lookup, 1,024 keys | 38.93 | 23.84 |
-| Response middleware hit | 191.00 | 175.00 |
+| Sample | Before, ns/op | After, ns/op | Before, small allocations/op | After, small allocations/op |
+| --- | ---: | ---: | ---: | ---: |
+| Decode, route, and render | 3,433 | 2,870 | 95.89 | 68.56 |
+| Direct response lookup, one key | 318 | 41 | 15.00 | 2.00 |
+| Direct response lookup, 1,024 keys | 9,995 | 605 | 38.93 | 22.84 |
+| Prebuilt middleware action hit | 46,059 | 15,181 | 191.00 | 116.00 |
+
+The baseline was `319505b` with the populated-cache workload backported. The
+new `response_middleware_request` sample also constructs the middleware action
+on every iteration from an already decoded context. It measured 15,640 ns/op
+and 128 small allocations/op in the same comparison.
 
 ## Network microbenchmark
 

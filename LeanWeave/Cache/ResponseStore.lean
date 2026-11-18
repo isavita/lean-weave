@@ -183,8 +183,8 @@ private def ResponseState.remove (state : ResponseState) (key : CacheKey) : Resp
   let state := { state with variants := index }
   return { state with bytes := state.bytes - node.cost }
 
-private def ResponseState.touch (state : ResponseState) (limits : ResponseLimits) (key : CacheKey) : ResponseState := Id.run do
-  let some node := state.nodes.get? key | return state
+private def ResponseState.touch (state : ResponseState) (limits : ResponseLimits)
+    (key : CacheKey) (node : Node) : ResponseState := Id.run do
   let protectedCountLimit := limits.maxEntries * limits.protectedPercent / 100
   let protectedByteLimit := limits.maxBytes * limits.protectedPercent / 100
   let destination := if protectedCountLimit == 0 || node.cost > protectedByteLimit then
@@ -236,7 +236,7 @@ def ResponseStore.lookup (store : ResponseStore) (key : CacheKey) : IO (Option C
     match state.nodes.get? key with
     | none => (none, state)
     | some node =>
-        if node.entry.fresh now then (some node.entry, state.touch store.limits key)
+        if node.entry.fresh now then (some node.entry, state.touch store.limits key node)
         else (none, state.remove key)
 
 /-- Find the newest matching Vary variant without scanning unrelated routes.
@@ -246,18 +246,18 @@ def ResponseStore.lookupMatching (store : ResponseStore) (base : CacheKey)
   let now ← IO.monoMsNow
   store.state.modifyGet fun state => Id.run do
     let mut state := state
-    let mut best : Option (CacheKey × CacheEntry) := none
+    let mut best : Option (CacheKey × Node) := none
     for key in state.variants.getD base #[] do
       if let some node := state.nodes.get? key then
         if !node.entry.fresh now then state := state.remove key
         else if node.entry.baseKey == base && accepts node.entry then
           match best with
-          | none => best := some (key, node.entry)
+          | none => best := some (key, node)
           | some (_, previous) =>
-            if node.entry.storedAt >= previous.storedAt then
-              best := some (key, node.entry)
-    if let some (key, entry) := best then
-      return (some entry, state.touch store.limits key)
+            if node.entry.storedAt >= previous.entry.storedAt then
+              best := some (key, node)
+    if let some (key, node) := best then
+      return (some node.entry, state.touch store.limits key node)
     return (none, state)
 
 /-- Reject oversized and already-expired entries before mutating the store.

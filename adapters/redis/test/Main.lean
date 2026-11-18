@@ -6,7 +6,7 @@ private def publicPolicy : Cache.Policy :=
   { admit := some (fun ctx => pure (.cache ctx "public:redis:test")) }
 
 private def admittedResponseKey (ctx : Context) : String :=
-  Cache.key #["admitted:redis:v1", "public:redis:test", Cache.responseKey ctx publicPolicy]
+  LeanWeave.Redis.responseKey ctx "public:redis:test" publicPolicy
 
 private def check (condition : Bool) (message : String) : IO Unit :=
   unless condition do throw (IO.userError message)
@@ -60,6 +60,14 @@ private def cachedResponses (client : Client) : IO Unit := do
   let first ← value (handler ctx)
   let second ← value (handler ctx)
   check (first.body == second.body && (← calls.get) == 1) "Redis response cache missed public fill"
+  let cold ← context "/head-cache-miss"
+  let headTag : LeanNet.HTTP1.Header := { name := "if-none-match", value := (Cache.etag ByteArray.empty).toUTF8 }
+  let coldHead := { cold with request := { cold.request with method := "HEAD", headers := cold.request.headers.push headTag } }
+  let headOrigin := middleware client publicPolicy (fun _ =>
+    pure ((Response.text "").withHeader "cache-control" "public, max-age=10"))
+  let headMiss ← value (headOrigin coldHead)
+  check (headMiss.status == 200 && (headMiss.getHeader "etag").isNone)
+    "Redis HEAD miss does not synthesize a validator from a HEAD-only body"
   let defaultCalls ← IO.mkRef (0 : Nat)
   let defaultHandler := middleware client {} (fun _ => do
     defaultCalls.modify (· + 1)

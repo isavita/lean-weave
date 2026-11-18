@@ -33,9 +33,6 @@ private def tokens (s : String) : Array String :=
 private def directive (s name : String) : Bool :=
   (tokens s).any (fun p => ((p.splitOn "=").head!).trimAscii.toString == name)
 
-private def bareDirective (s name : String) : Bool :=
-  (tokens s).any (· == name)
-
 private def values (headers : Array LeanNet.HTTP1.Header) (name : String) : String :=
   String.intercalate "," ((headers.filter (fun h => h.name.toLower == name)).toList.map fun h => (String.fromUTF8? h.value).getD "no-store")
 
@@ -82,22 +79,48 @@ private def effectiveVary (policy : Policy) (response : Response) : Option (Arra
           names := names.push name
   return names.qsort (· <= ·)
 
-private def validCacheControl (headers : Array LeanNet.HTTP1.Header) : Bool := Id.run do
+private structure CacheDirectives where
+  publicResponse : Bool := false
+  sharedForbidden : Bool := false
+  maxAge : Option Nat := none
+  sharedMaxAge : Option Nat := none
+
+private def deltaSeconds (value : String) : Option Nat :=
+  if value.startsWith "\"" && value.endsWith "\"" && value.utf8ByteSize >= 2 then
+    ((value.drop 1).toString.dropEnd 1).toString.toNat?
+  else value.toNat?
+
+/-- Scan each field once. Numeric directives accept a quoted decimal argument.
+    Other quoted arguments conservatively bypass this cache. -/
+private def cacheDirectives (headers : Array LeanNet.HTTP1.Header) : Option CacheDirectives := Id.run do
+  let mut result : CacheDirectives := {}
   for field in headers do
     if field.name.toLower != "cache-control" then continue
-    let some raw := String.fromUTF8? field.value | return false
-    -- Quoted extension arguments require a full HTTP field parser. Bypass
-    -- those responses rather than mistake a quoted comma for a directive.
-    if raw.toUTF8.data.any (fun b => b == 34 || b == 92 || b < 32 && b != 9 || b == 127) then return false
+    let some raw := String.fromUTF8? field.value | return none
+    if field.value.data.any (fun b => (b < 32 && b != 9) || b == 127) then return none
     for part in raw.splitOn "," do
       let pieces := part.trimAscii.toString.splitOn "="
-      if pieces.isEmpty || pieces.length > 2 then return false
-      let name := pieces[0]!.trimAscii.toString.toUTF8
-      if name.isEmpty || !name.data.all isFieldNameByte then return false
-      if pieces.length == 2 then
-        let value := pieces[1]!.trimAscii.toString.toUTF8
-        if value.isEmpty || !value.data.all isFieldNameByte then return false
-  return true
+      if pieces.length > 2 then return none
+      let name := pieces.head!.trimAscii.toString.toLower
+      if name.isEmpty || !name.toUTF8.data.all isFieldNameByte then return none
+      let argument := pieces[1]?.map (·.trimAscii.toString)
+      match name with
+      | "public" =>
+          if argument.isSome then return none
+          result := { result with publicResponse := true }
+      | "max-age" | "s-maxage" =>
+          let some seconds := argument.bind deltaSeconds | return none
+          if name == "max-age" then
+            if result.maxAge.isSome then return none
+            result := { result with maxAge := some seconds }
+          else
+            if result.sharedMaxAge.isSome then return none
+            result := { result with sharedMaxAge := some seconds }
+      | _ =>
+          if argument.any (fun value => value.isEmpty || !value.toUTF8.data.all isFieldNameByte) then return none
+          if name == "private" || name == "no-store" || name == "no-cache" then
+            result := { result with sharedForbidden := true }
+  return some result
 
 private def asksForRevalidation (ctx : Context) : Bool :=
   let directives := tokens (values ctx.request.headers "cache-control")
@@ -116,16 +139,15 @@ def eligibleRequest (ctx : Context) : Bool :=
     "if-modified-since"].contains h.name.toLower)) &&
   !asksForRevalidation ctx
 
-private def admittedVary? (policy : Policy) (response : Response) : Option (Array String) :=
-  let cc := values response.headers "cache-control"
+private def admittedVary? (policy : Policy) (response : Response) : Option (Array String) := do
+  let cc ← cacheDirectives response.headers
   let noncePolicy := response.headers.any fun header =>
     if !["content-security-policy", "content-security-policy-report-only"].contains header.name.toLower then false
     else match String.fromUTF8? header.value with
       | none => true
       | some value => (value.toLower.splitOn "nonce-").length > 1
-  if noncePolicy || !validCacheControl response.headers || response.stream.isSome ||
-      response.status != 200 || !bareDirective cc "public" || directive cc "private" ||
-      directive cc "no-store" || directive cc "no-cache" ||
+  if noncePolicy || response.stream.isSome || response.status != 200 ||
+      !cc.publicResponse || cc.sharedForbidden ||
       response.headers.any (fun h => ["set-cookie", "connection", "keep-alive",
         "proxy-connection", "transfer-encoding", "upgrade", "te", "trailer",
         "content-range"].contains h.name.toLower) then none
@@ -174,16 +196,17 @@ def responseBaseKey (scope : String) (ctx : Context) (policy : Policy := {}) : C
     for field in fields do parts := parts.push field.value
   return CacheKey.ofByteParts parts
 
-/-- Request values nominated by Vary, preserving absent versus present-empty
-    fields and opaque bytes. Exact byte matching is deliberately conservative. -/
 private def noAdditionalVary : CacheKey := CacheKey.ofParts #["vary:v2"]
 
+/-- Request values nominated by Vary, preserving absent versus present-empty
+    fields and opaque bytes. Exact byte matching is deliberately conservative. -/
 private def varyFingerprint (ctx : Context) (policy : Policy) (names : Array String) : CacheKey := Id.run do
   let mut parts : Array ByteArray := #[]
   for name in names do
     -- Configured dimensions are already compared by the base key.
-    if policy.vary.any (fun configured =>
-        configured.toSlice.eqIgnoreAsciiCase name.toSlice) then continue
+    if policy.vary.any (fun configured => configured == name ||
+        (configured.utf8ByteSize == name.utf8ByteSize &&
+          configured.toSlice.eqIgnoreAsciiCase name.toSlice)) then continue
     let fields := ctx.request.headers.filter (fun h => h.name.toLower == name)
     parts := parts.push name.toUTF8
     parts := parts.push (toString fields.size).toUTF8
@@ -210,17 +233,8 @@ def effectivePolicy (ctx : Context) (policy : Policy) : Policy :=
   | some ttl => { policy with ttlMs := min ttl policy.ttlMs }
   | none => policy
 
-private def freshnessLifetimeMs? (policy : Policy) (response : Response) : Option Nat := do
-  let cc := tokens (values response.headers "cache-control")
-  let shared := cc.filter (fun t => ((t.splitOn "=").head!).trimAscii.toString == "s-maxage")
-  let ordinary := cc.filter (fun t => ((t.splitOn "=").head!).trimAscii.toString == "max-age")
-  if shared.size > 1 || ordinary.size > 1 then none else do
-    let chosen := if shared.isEmpty then ordinary else shared
-    if chosen.isEmpty then return policy.ttlMs
-    let pair := chosen[0]!.splitOn "="
-    if pair.length != 2 then none else do
-      let seconds ← pair[1]!.trimAscii.toString.toNat?
-      return min policy.ttlMs (seconds * 1000)
+private def CacheDirectives.lifetime (cc : CacheDirectives) : Option Nat :=
+  (cc.sharedMaxAge.or cc.maxAge).map (· * 1000)
 
 private def ageValueMs? (response : Response) : Option Nat := do
   let fields := response.headers.filter (fun h => h.name.toLower == "age")
@@ -241,14 +255,12 @@ private def apparentAgeMs? (response : Response) (nowUnixMs : Int) : Option Nat 
     directives bypass storage. The fill delay is included conservatively. -/
 def freshnessAt? (policy : Policy) (response : Response) (nowUnixMs : Int)
     (fillDelayMs : Nat) : Option (Nat × Nat) := do
-  let mut lifetime ← freshnessLifetimeMs? policy response
-  let directives := tokens (values response.headers "cache-control")
-  let explicit := directives.any (fun part =>
-    let name := ((part.splitOn "=").head!).trimAscii.toString
-    name == "s-maxage" || name == "max-age")
+  let directives ← cacheDirectives response.headers
+  let explicit := directives.lifetime
+  let mut lifetime := min policy.ttlMs (explicit.getD policy.ttlMs)
   let expires := response.headers.filter (fun h => h.name.toLower == "expires")
   if expires.size > 1 then none else do
-    if !explicit && !expires.isEmpty then
+    if explicit.isNone && !expires.isEmpty then
       let expiry ← LeanNet.HTTP.Static.parseHttpDate? expires[0]!.value (nowUnixMs / 1000)
       let dates := response.headers.filter (fun h => h.name.toLower == "date")
       if dates.size > 1 then none else do
@@ -263,9 +275,9 @@ def freshnessAt? (policy : Policy) (response : Response) (nowUnixMs : Int)
 /-- Age-only freshness estimate for callers without a wall clock. A Date header
     requires `freshnessAt?` with the current Unix time. -/
 def freshnessMs (policy : Policy) (response : Response) : Nat :=
-  if response.headers.any (fun h => h.name.toLower == "date") then 0 else
-  match freshnessLifetimeMs? policy response, ageValueMs? response with
-  | some lifetime, some age => lifetime - age
+  if response.headers.any (fun h => h.name.toLower == "date" || h.name.toLower == "expires") then 0 else
+  match cacheDirectives response.headers, ageValueMs? response with
+  | some directives, some age => min policy.ttlMs (directives.lifetime.getD policy.ttlMs) - age
   | _, _ => 0
 
 /-- Weak representation validator derived from SHA-256 of the owned body. -/
@@ -322,7 +334,7 @@ private def entityTag (response : Response) : Option ByteArray :=
   (response.headers.find? (fun h => h.name.toLower == "etag")).map (·.value)
 
 def conditional (ctx : Context) (response : Response) : Response :=
-  if response.status != 200 then response else
+  if response.status != 200 || response.stream.isSome then response else
   let (tag, response) := match entityTag response with
     | some upstream => (upstream, response)
     | none =>
@@ -378,7 +390,7 @@ private def cachedResponse? (ctx : Context) (policy : Policy) (base : CacheKey)
     (entry : CacheEntry) : IO (Option Response) := do
   let now ← IO.monoMsNow
   let elapsed := now - entry.storedAt
-  if now < entry.storedAt || elapsed >= entry.ttlMs || elapsed >= policy.ttlMs ||
+  if now < entry.storedAt || elapsed >= entry.ttlMs || entry.initialAgeMs + elapsed >= policy.ttlMs ||
       entry.baseKey != base then
     return none
   let response : Response := { status := entry.status, headers := entry.headers, body := entry.body }
@@ -391,7 +403,7 @@ private def cachedResponse? (ctx : Context) (policy : Policy) (base : CacheKey)
     fill. Other followers for that variant join it on this worker. -/
 private def fill (store : ResponseStore) (next : Handler) (ctx : Context)
     (base : CacheKey) (policy : Policy) : Nat → AppM Response
-  | 0 => do return conditional ctx (← next ctx)
+  | 0 => next ctx
   | fuel + 1 => do
     match ← store.claim base with
     | .overloaded =>
@@ -408,31 +420,36 @@ private def fill (store : ResponseStore) (next : Handler) (ctx : Context)
         AppM.ensuring (do
           let started ← IO.monoMsNow
           let response ← next ctx
-          if response.headers.size <= 1000 then
-            let some names := admittedVary? policy response | return response
-            let response := if (entityTag response).isSome then response
-              else response.withHeader "etag" (etag response.body)
-            let now ← IO.monoMsNow
-            let nowUnixMs := (← Std.Time.Timestamp.now).toMillisecondsSinceUnixEpoch.val
-            if let some (ttl, initialAge) := freshnessAt? policy response nowUnixMs (now - started) then
-              if ttl > 0 && (← store.generation) == flight.generation then
-                let fingerprint := varyFingerprint ctx policy names
-                let entry : CacheEntry := {
-                  status := response.status
-                  headers := response.headers
-                  body := response.body
-                  ttlMs := ttl
-                  storedAt := now
-                  initialAgeMs := initialAge
-                  baseKey := base
-                  varyNames := names
-                  varyFingerprint := fingerprint
-                }
-                if ← store.storeChecked (variantKey base fingerprint) entry then
-                  let _ ← store.finish flight (some entry)
-                  pure ()
-            return conditional ctx response
-          return response) (store.abort flight)
+          if response.headers.size > 1000 || response.body.size > store.limits.maxEntryBytes then
+            return response
+          let some names := admittedVary? policy response | return response
+          let now ← IO.monoMsNow
+          let nowUnixMs := (← Std.Time.Timestamp.now).toMillisecondsSinceUnixEpoch.val
+          let some (ttl, initialAge) := freshnessAt? policy response nowUnixMs (now - started)
+            | return response
+          if ttl == 0 || (← store.generation) != flight.generation then return response
+          let response := if (entityTag response).isSome then response
+            else response.withHeader "etag" (etag response.body)
+          let response := if response.headers.any (fun h => h.name.toLower == "date") then response
+            else
+              let date : LeanNet.HTTP1.Header := ⟨"date", LeanNet.HTTP.Static.formatHttpDate (nowUnixMs / 1000)⟩
+              { response with headers := response.headers.push date }
+          let fingerprint := varyFingerprint ctx policy names
+          let entry : CacheEntry := {
+            status := response.status
+            headers := response.headers
+            body := response.body
+            ttlMs := ttl
+            storedAt := now
+            initialAgeMs := initialAge
+            baseKey := base
+            varyNames := names
+            varyFingerprint := fingerprint
+          }
+          if ← store.storeChecked (variantKey base fingerprint) entry then
+            let _ ← store.finish flight (some entry)
+            pure ()
+          return conditional ctx response) (store.abort flight)
 
 /-- Create once per reactor worker. A cache hit reuses the owned body ByteArray;
     lean-net remains responsible for framing and transport writes. -/

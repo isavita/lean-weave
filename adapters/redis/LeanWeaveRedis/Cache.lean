@@ -17,7 +17,9 @@ private def admitRequest (ctx : Context) (policy : Cache.Policy) : AppM Cache.Ad
   if scope.isEmpty || scope.utf8ByteSize > 256 then return .bypass verified
   return .cache verified scope
 
-private def responseKey (ctx : Context) (scope : String) (policy : Cache.Policy) : String :=
+/-- Key for `Client.delete`. Use the checked context and verified scope returned
+    by admission, together with the route's cache policy. -/
+def responseKey (ctx : Context) (scope : String) (policy : Cache.Policy := {}) : String :=
   Cache.key #["admitted:redis:v1", scope, Cache.responseKey ctx policy]
 
 /-- Redis keys currently include only configured Vary dimensions. Until the
@@ -58,7 +60,7 @@ def middleware (client : Client) (policy : Cache.Policy := {}) : Middleware := f
   let key := responseKey ctx scope policy
   if let some bytes ← client.get key then
     if let some response ← cached ctx policy bytes then return response
-  if ctx.request.method == "HEAD" then return Cache.conditional ctx (← next ctx)
+  if ctx.request.method == "HEAD" then return ← next ctx
   let owner ← Session.randomToken
   unless ← client.acquire key owner do
     return (Response.text "cache generation busy" 503).withHeader "retry-after" "1"

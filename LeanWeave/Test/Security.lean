@@ -199,6 +199,12 @@ private def responseGateRegressionTests : IO Unit := do
   let spacedLifetime := (Response.text "x").withHeader "cache-control" "public, max-age = 0"
   check ((Cache.freshnessAt? {} spacedLifetime nowUnixMs 0).map Prod.fst == some 0)
     "optional whitespace cannot hide zero max-age"
+  let quotedLifetime := (Response.text "x").withHeader "cache-control" "public, max-age=\"7\", s-maxage=3"
+  check (Cache.eligibleResponse {} quotedLifetime && Cache.freshnessMs {} quotedLifetime == 3000)
+    "quoted decimal freshness is accepted and s-maxage takes precedence"
+  let repeated := quotedLifetime.headers.push (header "Cache-Control" "max-age=7")
+  check (!Cache.eligibleResponse {} { quotedLifetime with headers := repeated })
+    "repeated freshness across cache-control field lines is not cached"
   let badAge := yesterday.withHeader "age" "bogus"
   check ((Cache.freshnessAt? {} badAge nowUnixMs 0).isNone) "invalid Age bypasses storage"
   let duplicateAge := { yesterday with headers := yesterday.headers ++ #[header "age" "1", header "age" "2"] }
@@ -225,6 +231,9 @@ private def responseGateRegressionTests : IO Unit := do
   check (firstDated.body == secondDated.body && (← datedCalls.get) == 1 &&
     ((secondDated.getHeader "age").bind String.toNat?).getD 0 >= 5)
     "Date apparent age is reported on a cache hit"
+  let agedCutoff := { context with attributes := context.attributes.push ("tenant.cache.ttlMs", "5000") }
+  let _ ← ok (← (dated agedCutoff).run)
+  check ((← datedCalls.get) == 2) "tightened policy counts age already present at fill time"
 
   let ttlCalls ← IO.mkRef 0
   let ttlStore ← Cache.ResponseStore.new

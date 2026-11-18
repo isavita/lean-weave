@@ -30,6 +30,14 @@ private def sampleBenchmark (name : String) (count : Nat) (action : Nat → IO N
     ("allocation_scope", Lean.toJson ("Lean thread small allocations, including loop and IO scaffolding; excludes large and native allocations" : String)),
     ("checksum", Lean.toJson checksum)]).compress
 
+private def responseBytes (action : AppM Response) : IO Nat := do
+  match ← action.run with
+  | .error error => throw (IO.userError error.message)
+  | .ok response => return response.body.size
+
+@[noinline] private def responseRequestBytes (handler : Handler) (context : Context) : IO Nat :=
+  responseBytes (handler context)
+
 def main (args : List String) : IO Unit := do
   let count := (args.head?.bind String.toNat?).getD 20000
   if count == 0 || count > 10000000 then throw (IO.userError "iterations must be 1..10000000")
@@ -94,12 +102,10 @@ def main (args : List String) : IO Unit := do
   } (fun _ => do
     upstreamCalls.modify (· + 1)
     pure (({ body } : Response).withHeader "cache-control" "public, max-age=3600"))
-  let runCached : IO Nat := do
-    match ← (cachedHandler context).run with
-    | .error error => throw (IO.userError error.message)
-    | .ok response => return response.body.size
+  let runCached := responseBytes (cachedHandler context)
   if (← runCached) != body.size then
     throw (IO.userError "could not seed response middleware benchmark")
   sampleBenchmark "response_middleware_hit" count fun _ => runCached
+  sampleBenchmark "response_middleware_request" count fun _ => responseRequestBytes cachedHandler context
   if (← upstreamCalls.get) != 1 then
     throw (IO.userError "response middleware benchmark reached upstream on a cache hit")

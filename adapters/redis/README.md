@@ -89,7 +89,9 @@ application policy. `publish` checks the owner token, writes the value with TTL 
 lease in one atomic evaluation. `delete` invalidates both the value and any
 outstanding lease atomically. Consequently an expired, replaced or invalidated
 producer cannot repopulate the key through `publish`. The response/fragment
-middleware uses this protocol. Plain `set` is an unconditional low-level write
+middleware uses this protocol. For response invalidation, pass
+`Redis.responseKey checkedContext verifiedScope policy` to `client.delete`.
+Plain `set` is an unconditional low-level write
 and does not provide that fill guarantee. Cancellation closes command sockets;
 a fill lease remaining after cancellation expires within its bounded TTL.
 
