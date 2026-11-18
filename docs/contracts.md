@@ -29,7 +29,9 @@ Admin routes add `requireAuth` and `authorize`; APIs can use a token resolver an
 exact-origin CORS. `Server.Config.headerChecks` can check hosts and origin before
 body intake or 100 Continue. Early replies are bodyless on both protocols so
 head-stage rejection semantics agree. CSRF validates a session-bound header/form token after
-body decoding; missing sessions and duplicate form tokens fail closed.
+body decoding. It rejects missing sessions, repeated token headers and duplicate
+form tokens. CORS validates one requested method and checks every field in the
+preflight's requested header list.
 
 Proxy headers are ignored unless an application supplies a trusted transport-peer
 predicate. `Middleware.trustedProxyAddresses` compares an explicit list of 4/16-byte

@@ -348,6 +348,20 @@ def securityTests : IO Unit := do
   let post := { context with request := { context.request with method := "POST", headers := context.request.headers.push (header "content-type" "application/x-www-form-urlencoded"), body := ("_csrf=" ++ one.csrf).toUTF8 }, attributes := #[("csrf", one.csrf)] }
   let next : Handler := fun _ => pure (Response.text "ok")
   check ((← status (Middleware.csrf {} next) post) == 200) "valid CSRF token"
+  let csrf := Middleware.csrf {} next
+  let tokenHeader := header "x-csrf-token" one.csrf
+  let headerPost := { post with request := { post.request with
+    headers := context.request.headers.push tokenHeader, body := ByteArray.empty } }
+  check ((← status csrf headerPost) == 200) "valid standalone CSRF header"
+  for field in #[header "X-CSRF-Token" one.csrf, { name := "x-csrf-token", value := ByteArray.mk #[255] }] do
+    let repeated := { headerPost with request := { headerPost.request with headers := headerPost.request.headers.push field } }
+    check ((← status csrf repeated) == 400) "CSRF rejects repeated token fields"
+  let invalidHeader := { post with request := { post.request with
+    headers := post.request.headers.push { name := "x-csrf-token", value := ByteArray.mk #[255] } } }
+  check ((← status csrf invalidHeader) == 400) "CSRF rejects an undecodable token header"
+  let repeatedContentType := { post with request := { post.request with
+    headers := post.request.headers.push (header "Content-Type" "application/x-www-form-urlencoded") } }
+  check ((← status csrf repeatedContentType) == 400) "CSRF requires one Content-Type for form tokens"
   let uploadToken := ("--csrf\r\nContent-Disposition: form-data; name=\"_csrf\"\r\n\r\n" ++ one.csrf ++ "\r\n--csrf--\r\n").toUTF8
   let upload := { post with request := { post.request with headers := #[header "host" "example.test", header "content-type" "multipart/form-data; boundary=\"csrf\""], body := uploadToken } }
   check ((← status (Middleware.csrf {} next) upload) == 200) "multipart browser form CSRF token"
@@ -411,6 +425,16 @@ def securityTests : IO Unit := do
   let preflightResponse ← ok (← (cors varying preflight).run)
   check (preflightResponse.status == 204 && preflightResponse.getHeader "vary" ==
     some "Access-Control-Request-Method, Access-Control-Request-Headers, Origin") "CORS varies preflight responses"
+  let extendPreflight := fun (field : LeanNet.HTTP1.Header) =>
+    { preflight with request := { preflight.request with headers := preflight.request.headers.push field } }
+  check ((← status (cors varying) (extendPreflight (header "Access-Control-Request-Headers" " X-CSRF-Token "))) == 204)
+    "CORS accepts allowed names in split list-valued fields"
+  check ((← status (cors varying) (extendPreflight (header "Access-Control-Request-Headers" "x-custom"))) == 403)
+    "CORS checks every requested header field against the policy"
+  check ((← status (cors varying) (extendPreflight (header "Access-Control-Request-Method" "POST"))) == 400)
+    "CORS requires a single requested method field"
+  check ((← status (cors varying) (extendPreflight { name := "access-control-request-headers", value := ByteArray.mk #[255] })) == 400)
+    "CORS rejects an undecodable requested header field"
   let cache ← Cache.Store.new { maxEntries := 2, maxBytes := 256, maxEntryBytes := 128, maxInFlight := 1 }
   let _ ← cache.put "a" "one".toUTF8 10 100
   let _ ← cache.put "b" "two".toUTF8 10 100
