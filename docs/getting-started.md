@@ -107,4 +107,6 @@ in place of `--path`. On Windows the native executable is `weave.exe`.
 
 `dev` requires `python3` on `PATH`. Open `http://127.0.0.1:8080/` while it runs.
 Save an edit to `App.lean` and refresh after the rebuild. A compilation error
-keeps the previous server running. `WEAVE_PORT` selects a different port.
+keeps the previous server running. Stopping the launcher cancels an active
+build and lets the running application drain. The launcher reserves standard
+input for this supervision. `WEAVE_PORT` selects a different port.
