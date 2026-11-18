@@ -67,6 +67,16 @@ def main (args : List String) : IO Unit := do
       | throw (IO.userError "response cache lookup missed during hit benchmark")
     return cached.body.size
 
+  let keys := (Array.range 1024).map fun i => Cache.CacheKey.ofParts #["populated", toString i]
+  let populated ← Cache.ResponseStore.new
+  for key in keys do
+    unless ← populated.storeChecked key { entry with baseKey := key } do
+      throw (IO.userError "could not populate response cache benchmark")
+  sampleBenchmark "response_store_lookup_populated" count fun i => do
+    let some cached ← populated.lookup keys[i % keys.size]!
+      | throw (IO.userError "populated response cache missed during hit benchmark")
+    return cached.body.size
+
   let request : LeanNet.HTTP1.Request := {
     method := "GET"
     target := "/cached?q=lean".toUTF8

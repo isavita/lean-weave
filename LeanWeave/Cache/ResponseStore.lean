@@ -12,14 +12,16 @@ namespace CacheKey
 
 private def appendLength (bytes : ByteArray) (length : Nat) : ByteArray := Id.run do
   let mut bytes := bytes
+  let word := length.toUInt64
   for i in [:8] do
-    bytes := bytes.push ((length / (256 ^ (7 - i))) % 256).toUInt8
+    bytes := bytes.push (word >>> ((7 - i) * 8).toUInt64).toUInt8
   return bytes
 
 /-- Byte components preserve opaque request-header values, including invalid
     UTF-8 and the distinction between absent and present-but-empty fields. -/
 def ofByteParts (parts : Array ByteArray) : CacheKey := Id.run do
-  let mut bytes := appendLength ByteArray.empty parts.size
+  let size := parts.foldl (fun size part => size + 8 + part.size) 8
+  let mut bytes := appendLength (ByteArray.emptyWithCapacity size) parts.size
   for part in parts do
     bytes := (appendLength bytes part.size) ++ part
   return ⟨Security.Crypto.hex (Security.Crypto.sha256 bytes)⟩
@@ -137,7 +139,10 @@ private def ResponseState.withQueue (state : ResponseState) (segment : Segment) 
 /-- Unlink a node while retaining it in the index. -/
 private def ResponseState.unlink (state : ResponseState) (key : CacheKey) : ResponseState := Id.run do
   let some node := state.nodes.get? key | return state
+  let queue := state.queue node.segment
   let mut nodes := state.nodes
+  -- Drop the state's reference before mutating the worker-owned table.
+  let state := { state with nodes := {} }
   if let some previous := node.prev then
     if let some neighbor := nodes.get? previous then
       nodes := nodes.insert previous { neighbor with next := node.next }
@@ -145,7 +150,6 @@ private def ResponseState.unlink (state : ResponseState) (key : CacheKey) : Resp
     if let some neighbor := nodes.get? next then
       nodes := nodes.insert next { neighbor with prev := node.prev }
   nodes := nodes.insert key { node with prev := none, next := none }
-  let queue := state.queue node.segment
   let queue := { queue with
     head := if queue.head == some key then node.next else queue.head
     tail := if queue.tail == some key then node.prev else queue.tail
@@ -156,7 +160,9 @@ private def ResponseState.unlink (state : ResponseState) (key : CacheKey) : Resp
 private def ResponseState.linkFront (state : ResponseState) (key : CacheKey) (segment : Segment) : ResponseState := Id.run do
   let some node := state.nodes.get? key | return state
   let queue := state.queue segment
-  let mut nodes := state.nodes.insert key { node with segment, prev := none, next := queue.head }
+  let mut nodes := state.nodes
+  let state := { state with nodes := {} }
+  nodes := nodes.insert key { node with segment, prev := none, next := queue.head }
   if let some oldHead := queue.head then
     if let some neighbor := nodes.get? oldHead then
       nodes := nodes.insert oldHead { neighbor with prev := some key }
@@ -179,10 +185,12 @@ private def ResponseState.remove (state : ResponseState) (key : CacheKey) : Resp
 
 private def ResponseState.touch (state : ResponseState) (limits : ResponseLimits) (key : CacheKey) : ResponseState := Id.run do
   let some node := state.nodes.get? key | return state
-  let destination := if node.segment == .probation then Segment.protectedQ else node.segment
-  let mut state := (state.unlink key).linkFront key destination
   let protectedCountLimit := limits.maxEntries * limits.protectedPercent / 100
   let protectedByteLimit := limits.maxBytes * limits.protectedPercent / 100
+  let destination := if protectedCountLimit == 0 || node.cost > protectedByteLimit then
+    Segment.probation else Segment.protectedQ
+  if node.segment == destination && node.prev.isNone then return state
+  let mut state := (state.unlink key).linkFront key destination
   for _ in [:limits.maxEntries] do
     if state.protectedQ.count <= protectedCountLimit && state.protectedQ.bytes <= protectedByteLimit then break
     let some tail := state.protectedQ.tail | break
@@ -200,55 +208,57 @@ private def ResponseState.evictToFit (state : ResponseState) (limits : ResponseL
   return state
 
 private def ResponseState.insertEntry (state : ResponseState) (limits : ResponseLimits)
-    (key : CacheKey) (entry : CacheEntry) (cost : Nat) : Option ResponseState := Id.run do
+    (key : CacheKey) (entry : CacheEntry) (cost : Nat) : Bool × ResponseState := Id.run do
   let mut state := state.remove key
   let variants := state.variants.getD entry.baseKey #[]
   if variants.size >= limits.maxVariantsPerBase then
     state := state.remove variants[0]!
   state := state.evictToFit limits cost
-  if state.nodes.size >= limits.maxEntries || state.bytes + cost > limits.maxBytes then return none
+  if state.nodes.size >= limits.maxEntries || state.bytes + cost > limits.maxBytes then
+    return (false, state)
   let node : Node := { entry, cost, segment := .probation }
   let index := state.variants.insert entry.baseKey ((state.variants.getD entry.baseKey #[]).push key)
   state := { state with nodes := state.nodes.insert key node }
   state := { state with variants := index }
   state := { state with bytes := state.bytes + cost }
-  return some (state.linkFront key .probation)
+  return (true, state.linkFront key .probation)
 
 private def CacheEntry.fresh (entry : CacheEntry) (now : Nat) : Bool :=
   entry.ttlMs > 0 && now >= entry.storedAt && now - entry.storedAt < entry.ttlMs
 
-/-- Expected O(1) SLRU hit. No body serialization or body-byte copy occurs. -/
+/-- A hit reuses the stored body. Moving a node updates its neighbors in the
+    worker's hash table. Promotions can demote entries to meet the segment budget. -/
 def ResponseStore.lookup (store : ResponseStore) (key : CacheKey) : IO (Option CacheEntry) := do
   let now ← IO.monoMsNow
-  let state ← store.state.get
-  let some node := state.nodes.get? key | return none
-  if !node.entry.fresh now then
-    store.state.set (state.remove key)
-    return none
-  store.state.set (state.touch store.limits key)
-  return some node.entry
+  -- Consume the previous state. A separate get/set leaves the table shared
+  -- with the reference and can copy its bucket array on every move.
+  store.state.modifyGet fun state =>
+    match state.nodes.get? key with
+    | none => (none, state)
+    | some node =>
+        if node.entry.fresh now then (some node.entry, state.touch store.limits key)
+        else (none, state.remove key)
 
 /-- Find the newest matching Vary variant without scanning unrelated routes.
     The per-base candidate array is capped by `maxVariantsPerBase`. -/
 def ResponseStore.lookupMatching (store : ResponseStore) (base : CacheKey)
     (accepts : CacheEntry → Bool) : IO (Option CacheEntry) := do
   let now ← IO.monoMsNow
-  let mut state ← store.state.get
-  let mut best : Option (CacheKey × CacheEntry) := none
-  for key in state.variants.getD base #[] do
-    if let some node := state.nodes.get? key then
-      if !node.entry.fresh now then state := state.remove key
-      else if node.entry.baseKey == base && accepts node.entry then
-        match best with
-        | none => best := some (key, node.entry)
-        | some (_, previous) =>
-          if node.entry.storedAt >= previous.storedAt then
-            best := some (key, node.entry)
-  if let some (key, entry) := best then
-    store.state.set (state.touch store.limits key)
-    return some entry
-  store.state.set state
-  return none
+  store.state.modifyGet fun state => Id.run do
+    let mut state := state
+    let mut best : Option (CacheKey × CacheEntry) := none
+    for key in state.variants.getD base #[] do
+      if let some node := state.nodes.get? key then
+        if !node.entry.fresh now then state := state.remove key
+        else if node.entry.baseKey == base && accepts node.entry then
+          match best with
+          | none => best := some (key, node.entry)
+          | some (_, previous) =>
+            if node.entry.storedAt >= previous.storedAt then
+              best := some (key, node.entry)
+    if let some (key, entry) := best then
+      return (some entry, state.touch store.limits key)
+    return (none, state)
 
 /-- Reject oversized and already-expired entries before mutating the store.
     The caller must check request/response cache policy before calling this. -/
@@ -256,10 +266,8 @@ def ResponseStore.storeChecked (store : ResponseStore) (key : CacheKey) (entry :
   let now ← IO.monoMsNow
   let cost := entry.cost + key.digest.utf8ByteSize
   if !entry.fresh now || cost > store.limits.maxEntryBytes || cost > store.limits.maxBytes then return false
-  let state ← store.state.get
-  let some state := state.insertEntry store.limits key entry cost | return false
-  store.state.set state
-  return true
+  store.state.modifyGet fun state =>
+    state.insertEntry store.limits key entry cost
 
 def ResponseStore.store (store : ResponseStore) (key : CacheKey) (entry : CacheEntry) : IO Unit := do
   let _ ← store.storeChecked key entry

@@ -150,9 +150,10 @@ def responseKey (ctx : Context) (policy : Policy) : String :=
 private def admittedKey (scope : String) (ctx : Context) (policy : Policy) : String :=
   key #["admitted:v1", scope, responseKey ctx policy]
 
-/-- One length-prefixed digest for the response base key. Dynamic response Vary
-    fields are added by `variantKey` after the upstream response is known. -/
-private def responseBaseKey (scope : String) (ctx : Context) (policy : Policy) : CacheKey := Id.run do
+/-- Compute the key used by `ResponseStore.invalidateBase`. Supply the checked
+    request context and scope returned by admission, and the route's policy.
+    This selects all dynamic Vary variants of that key on the current worker. -/
+def responseBaseKey (scope : String) (ctx : Context) (policy : Policy := {}) : CacheKey := Id.run do
   let mut parts : Array ByteArray := #["response-base:v4".toUTF8, scope.toUTF8,
     policy.version.toUTF8, ctx.host.toUTF8, ctx.tenant.toUTF8,
     ctx.routeName.toUTF8, ctx.request.target, ctx.locale.toUTF8,
@@ -175,14 +176,20 @@ private def responseBaseKey (scope : String) (ctx : Context) (policy : Policy) :
 
 /-- Request values nominated by Vary, preserving absent versus present-empty
     fields and opaque bytes. Exact byte matching is deliberately conservative. -/
-private def varyFingerprint (ctx : Context) (names : Array String) : CacheKey := Id.run do
-  let mut parts : Array ByteArray := #["vary:v1".toUTF8]
+private def noAdditionalVary : CacheKey := CacheKey.ofParts #["vary:v2"]
+
+private def varyFingerprint (ctx : Context) (policy : Policy) (names : Array String) : CacheKey := Id.run do
+  let mut parts : Array ByteArray := #[]
   for name in names do
+    -- Configured dimensions are already compared by the base key.
+    if policy.vary.any (fun configured =>
+        configured.toSlice.eqIgnoreAsciiCase name.toSlice) then continue
     let fields := ctx.request.headers.filter (fun h => h.name.toLower == name)
     parts := parts.push name.toUTF8
     parts := parts.push (toString fields.size).toUTF8
     for field in fields do parts := parts.push field.value
-  return CacheKey.ofByteParts parts
+  if parts.isEmpty then return noAdditionalVary
+  return CacheKey.ofByteParts (#["vary:v2".toUTF8] ++ parts)
 
 private def variantKey (base fingerprint : CacheKey) : CacheKey :=
   CacheKey.ofParts #["variant:v1", base.digest, fingerprint.digest]
@@ -265,25 +272,67 @@ def freshnessMs (policy : Policy) (response : Response) : Nat :=
 def etag (bytes : ByteArray) : String :=
   "W/\"" ++ Security.Crypto.hex (Security.Crypto.sha256 bytes) ++ "\""
 
-private def stripWeak (s : String) : String :=
-  let text := s.trimAscii.toString
-  if text.startsWith "W/" then (text.drop 2).toString else text
+private def skipOWS (bytes : ByteArray) (start : Nat) : Nat := Id.run do
+  let mut offset := start
+  while offset < bytes.size && isOWS bytes[offset]! do
+    offset := offset + 1
+  return offset
+
+-- Return the quoted portion without the weak prefix and the next position.
+private def entityTagAt (bytes : ByteArray) (start : Nat) : Option (Nat × Nat) := Id.run do
+  let weak := start + 1 < bytes.size && bytes[start]! == 87 && bytes[start + 1]! == 47
+  let first := start + if weak then 2 else 0
+  if first >= bytes.size || bytes[first]! != 34 then return none
+  for offset in [first + 1:bytes.size] do
+    let byte := bytes[offset]!
+    if byte == 34 then return some (first, offset + 1)
+    if byte < 33 || byte == 127 then return none
+  return none
+
+-- If-None-Match is a list of quoted tags. Commas can occur inside a tag,
+-- and `*` is only valid as the whole field value.
+private def matchesIfNoneMatch (headers : Array LeanNet.HTTP1.Header) (current : ByteArray) : Bool := Id.run do
+  let mut fields := 0
+  let mut wildcard := false
+  let mut found := false
+  let currentTag := (entityTagAt current 0).bind fun (first, stop) =>
+    if stop == current.size then some (current.extract first stop) else none
+  for header in headers do
+    if header.name.toLower != "if-none-match" then continue
+    fields := fields + 1
+    let bytes := header.value
+    let start := skipOWS bytes 0
+    if start < bytes.size && bytes[start]! == 42 && skipOWS bytes (start + 1) == bytes.size then
+      wildcard := true
+      continue
+    let mut cursor := start
+    while cursor < bytes.size do
+      if bytes[cursor]! == 44 then
+        cursor := skipOWS bytes (cursor + 1)
+        continue
+      let some (first, stop) := entityTagAt bytes cursor | return false
+      if currentTag.any (· == bytes.extract first stop) then found := true
+      cursor := skipOWS bytes stop
+      if cursor == bytes.size then break
+      if bytes[cursor]! != 44 then return false
+      cursor := skipOWS bytes (cursor + 1)
+  return if wildcard then fields == 1 else found
+
+private def entityTag (response : Response) : Option ByteArray :=
+  (response.headers.find? (fun h => h.name.toLower == "etag")).map (·.value)
 
 def conditional (ctx : Context) (response : Response) : Response :=
   if response.status != 200 then response else
-  let tag := match response.getHeader "etag" with
-    | some upstream => upstream
-    | none => etag response.body
-  let response := if (response.getHeader "etag").isSome then response
-    else response.withHeader "etag" tag
+  let (tag, response) := match entityTag response with
+    | some upstream => (upstream, response)
+    | none =>
+        let tag := etag response.body
+        (tag.toUTF8, response.withHeader "etag" tag)
   if ctx.request.method != "GET" && ctx.request.method != "HEAD" then response else
-  match ctx.header "if-none-match" with
-  | none => response
-  | some ifNoneMatch =>
-      let tagMatches := (ifNoneMatch.splitOn ",").any
-        (fun t => t.trimAscii.toString == "*" || stripWeak t == stripWeak tag)
-      if tagMatches then { response with status := 304, body := ByteArray.empty }
-      else response
+  if ctx.request.headers.any (fun h => h.name.toLower == "if-none-match") &&
+      matchesIfNoneMatch ctx.request.headers tag then
+    { response with status := 304, body := ByteArray.empty }
+  else response
 
 -- Redis's optional adapter persists complete response envelopes. The worker-
 -- local ResponseStore does not call these functions or copy body bytes.
@@ -320,10 +369,10 @@ def decodeResponse (bytes : ByteArray) : Option (Response × Nat) := do
         cursor := cursor + nameSize + valueSize
     return ({ headers, body := bytes.extract cursor bytes.size }, high * 4294967296 + low)
 
-private def lookupVariant (store : ResponseStore) (ctx : Context)
+private def lookupVariant (store : ResponseStore) (ctx : Context) (policy : Policy)
     (base : CacheKey) : IO (Option CacheEntry) :=
   store.lookupMatching base (fun entry =>
-    entry.varyFingerprint == varyFingerprint ctx entry.varyNames)
+    entry.varyFingerprint == varyFingerprint ctx policy entry.varyNames)
 
 private def cachedResponse? (ctx : Context) (policy : Policy) (base : CacheKey)
     (entry : CacheEntry) : IO (Option Response) := do
@@ -350,9 +399,9 @@ private def fill (store : ResponseStore) (next : Handler) (ctx : Context)
     | .follower flight =>
         let shared ← store.wait flight (max 1 (min policy.waitTimeoutMs 30000))
         if let some entry := shared then
-          if entry.varyFingerprint == varyFingerprint ctx entry.varyNames then
+          if entry.varyFingerprint == varyFingerprint ctx policy entry.varyNames then
             if let some response ← cachedResponse? ctx policy base entry then return response
-        if let some entry ← lookupVariant store ctx base then
+        if let some entry ← lookupVariant store ctx policy base then
           if let some response ← cachedResponse? ctx policy base entry then return response
         return ← fill store next ctx base policy fuel
     | .leader flight =>
@@ -361,13 +410,13 @@ private def fill (store : ResponseStore) (next : Handler) (ctx : Context)
           let response ← next ctx
           if response.headers.size <= 1000 then
             let some names := admittedVary? policy response | return response
-            let response := if (response.getHeader "etag").isSome then response
+            let response := if (entityTag response).isSome then response
               else response.withHeader "etag" (etag response.body)
             let now ← IO.monoMsNow
             let nowUnixMs := (← Std.Time.Timestamp.now).toMillisecondsSinceUnixEpoch.val
             if let some (ttl, initialAge) := freshnessAt? policy response nowUnixMs (now - started) then
               if ttl > 0 && (← store.generation) == flight.generation then
-                let fingerprint := varyFingerprint ctx names
+                let fingerprint := varyFingerprint ctx policy names
                 let entry : CacheEntry := {
                   status := response.status
                   headers := response.headers
@@ -394,10 +443,10 @@ def middleware (store : ResponseStore) (policy : Policy := {}) : Middleware := f
   let policy := effectivePolicy ctx policy
   if policy.ttlMs == 0 || !incomingEligible || !eligibleRequest ctx then return ← next ctx
   let base := responseBaseKey scope ctx policy
-  if let some entry ← lookupVariant store ctx base then
+  if let some entry ← lookupVariant store ctx policy base then
     if let some response ← cachedResponse? ctx policy base entry then return response
   -- A HEAD miss must not populate GET storage with a HEAD-specific handler.
-  if ctx.request.method == "HEAD" then return conditional ctx (← next ctx)
+  if ctx.request.method == "HEAD" then return ← next ctx
   fill store next ctx base policy (store.limits.maxVariantsPerBase + 1)
 
 /-- Context-aware fragment caching applies tenant rules and all response isolation

@@ -47,6 +47,12 @@ private def responseStoreTests : IO Unit := do
   check (live <= 3) "response store hard item count"
   let slruStats ← slru.stats
   check (slruStats.entries <= 3 && slruStats.bytes <= 4096) "SLRU enforces count and byte bounds"
+  let uneven ← Cache.ResponseStore.new { maxBytes := 2048, maxEntryBytes := 2048, protectedPercent := 50 }
+  uneven.store keyA (mkEntry keyA "hot".toUTF8 cacheNow 60000)
+  let _ ← uneven.lookup keyA
+  uneven.store keyB (mkEntry keyB (ByteArray.mk (Array.replicate 1000 65)) cacheNow 60000)
+  let _ ← uneven.lookup keyB
+  check ((← uneven.stats).protectedEntries == 1) "a large hit cannot displace the entire protected segment"
   let tiny ← Cache.ResponseStore.new { maxEntries := 10, maxBytes := 700, maxEntryBytes := 700 }
   let largeBody := ByteArray.mk (Array.replicate 220 65)
   check (← tiny.storeChecked keyA (mkEntry keyA largeBody cacheNow 60000)) "response store bounded first byte insert"
@@ -270,6 +276,24 @@ private def responseGateRegressionTests : IO Unit := do
   let mobileHit ← ok (← (varyingCache (device "mobile" "new-id")).run)
   check (mobileHit.body == bodies[2]! && (← varyCalls.get) == 2)
     "newly discovered Vary variant is stored for later requests"
+  varyStore.invalidateBase (Cache.responseBaseKey "public:mixed-variants" context)
+  check ((← varyStore.stats).entries == 0) "invalidateBase uses the same key as middleware"
+
+private def conditionalCacheTests : IO Unit := do
+  let context ← ctx
+  let tagged := (Response.text "example").withHeader "etag" "W/\"version,2\""
+  let request := { context.request with headers := context.request.headers ++ #[
+    header "if-none-match" "\"version1\"", header "If-None-Match" "\"version,2\""] }
+  check ((Cache.conditional { context with request } tagged).status == 304)
+    "weak validation compares quoted tags across field lines"
+  let store ← Cache.ResponseStore.new
+  let origin := Cache.middleware store { admit := some fun c => pure (.cache c "public:head") }
+    (fun _ => pure ((Response.text "").withHeader "cache-control" "public"))
+  let headers := context.request.headers.push (header "if-none-match" (Cache.etag ByteArray.empty))
+  let request := { context.request with method := "HEAD", headers }
+  let head ← ok (← (origin { context with request }).run)
+  check (head.status == 200 && (head.getHeader "etag").isNone)
+    "HEAD miss does not synthesize a validator from a HEAD-only body"
 
 /-- Hostile input and isolation checks for middleware, decoders, sessions and caches. -/
 def securityTests : IO Unit := do
@@ -465,6 +489,7 @@ def securityTests : IO Unit := do
   check ((← fragments.state.get).inFlight.isEmpty) "cache lease released on cancellation"
   responseStoreTests
   responseGateRegressionTests
+  conditionalCacheTests
   IO.println "security/cache/session/body checks passed"
 
 end LeanWeave.Test

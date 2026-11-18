@@ -51,18 +51,20 @@ private def matchOne (segment : Segment) (value : String) : Option (Option (Stri
       return some (name, .int (← value.toInt?))
   | .rest _ => none
 
-private def matchSegments : List Segment → List String → Option (Array (String × CaptureValue))
-  | [], [] => some #[]
-  | [.rest name], values => some #[(name, .text (String.intercalate "/" values))]
-  | segment :: segments, value :: values => do
-    let capture ← matchOne segment value
-    let rest ← matchSegments segments values
-    return match capture with | none => rest | some pair => #[pair] ++ rest
-  | _, _ => none
-
 def Route.matches (route : Route) (ctx : Context) : Option (Array (String × CaptureValue)) := do
-  if !route.host.matches ctx.host then none
-  else matchSegments route.pattern.toList ctx.path.toList
+  if !route.host.matches ctx.host then failure
+  let mut captures := #[]
+  for i in [:route.pattern.size] do
+    let segment := route.pattern[i]!
+    if let .rest name := segment then
+      if i + 1 != route.pattern.size then failure
+      else
+        let tail := ctx.path.extract i ctx.path.size
+        return captures.push (name, .text (String.intercalate "/" tail.toList))
+    let value ← ctx.path[i]?
+    if let some pair ← matchOne segment value then captures := captures.push pair
+  if route.pattern.size == ctx.path.size then return captures
+  else failure
 
 def Route.precedes (a b : Route) : Bool :=
   if a.host.rank != b.host.rank then a.host.rank > b.host.rank
@@ -119,10 +121,8 @@ def compile (routes : Array Route) : Except String Router := do
   validate routes
   return { routes := routes.qsort Route.precedes }
 
-private def allowedMethods (candidates : Array Route) : Array String := Id.run do
-  let mut methods : Array String := #[]
-  for route in candidates do
-    if !methods.contains route.method then methods := methods.push route.method
+private def withImplicitMethods (methods : Array String) : Array String := Id.run do
+  let mut methods := methods
   if methods.contains "GET" && !methods.contains "HEAD" then methods := methods.push "HEAD"
   if !methods.contains "OPTIONS" then methods := methods.push "OPTIONS"
   return methods.qsort (· < ·)
@@ -136,18 +136,24 @@ private def validCaptureSegment (value : String) : Bool :=
     its length. Automatic OPTIONS and 405 share the deterministic Allow set. -/
 def handler (router : Router) : Handler := fun ctx => do
   if ctx.request.method == "OPTIONS" && ctx.request.target == "*".toUTF8 then
-    let methods := allowedMethods (router.routes.filter fun route => route.host.matches ctx.host)
-    return (Response.text "" 204).withHeader "allow" (String.intercalate ", " methods.toList)
-  let candidates := router.routes.filter fun route => (route.matches ctx).isSome
-  if candidates.isEmpty then return Response.text "Not Found" 404
+    let mut methods := #[]
+    for route in router.routes do
+      if route.host.matches ctx.host && !methods.contains route.method then
+        methods := methods.push route.method
+    return (Response.text "" 204).withHeader "allow" (String.intercalate ", " (withImplicitMethods methods).toList)
   let method := ctx.request.method
-  let selected := candidates.find? (fun route => route.method == method)
-  let selected := if method == "HEAD" && selected.isNone then
-      candidates.find? (fun route => route.method == "GET") else selected
-  if let some route := selected then
-    let captures := (route.matches ctx).getD #[]
+  let mut methods := #[]
+  let mut headFallback : Option (Route × Array (String × CaptureValue)) := none
+  for route in router.routes do
+    if let some captures := route.matches ctx then
+      if route.method == method then return ← route.handler { ctx with captures, routeName := route.name }
+      if method == "HEAD" && route.method == "GET" && headFallback.isNone then
+        headFallback := some (route, captures)
+      if !methods.contains route.method then methods := methods.push route.method
+  if let some (route, captures) := headFallback then
     return ← route.handler { ctx with captures, routeName := route.name }
-  let allow := String.intercalate ", " (allowedMethods candidates).toList
+  if methods.isEmpty then return Response.text "Not Found" 404
+  let allow := String.intercalate ", " (withImplicitMethods methods).toList
   if method == "OPTIONS" then
     return (Response.text "" 204).withHeader "allow" allow
   return (Response.text "Method Not Allowed" 405).withHeader "allow" allow
@@ -162,7 +168,7 @@ def url (router : Router) (name : String) (values : Array (String × CaptureValu
   let mut used : Array String := #[]
   for segment in route.pattern do
     match segment with
-    | .literal value => parts := parts.push value
+    | .literal value => parts := parts.push (encodeSegment value)
     | .capture key type =>
       let some (_, value) := values.find? (fun pair => pair.1 == key)
         | throw s!"missing capture '{key}'"

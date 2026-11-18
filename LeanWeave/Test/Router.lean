@@ -26,6 +26,7 @@ weave_routes routes where {
   route "GET" "/explicit" as explicitGet => text "GET",
   route "HEAD" "/explicit" as explicitHead => text "HEAD",
   route "GET" "/trailing/" as trailing => text "slash",
+  route "GET" "/café menu" as cafe => text "café",
   route "GET" "/files/*path" as files => word,
   route "GET" "/files" as filesRoot => text "exact",
   route "GET" "/host" as anyHost => text "any",
@@ -123,6 +124,16 @@ def run : IO Unit := do
   check ((routes.posts.showUrl 17).toOption == some "/posts/17") "typed resource reverse"
   check ((routes.numberUrl 3 #[("q", "a & b")]).toOption == some "/v/3?q=a%20%26%20b") "query encoding"
   check ((routes.fallbackUrl "a?# b").toOption == some "/v/a%3F%23%20b") "capture segment encoding"
+  let cafe ← match routes.cafeUrl with
+    | .ok url => pure url
+    | .error message => throw (IO.userError message)
+  check (cafe == "/caf%C3%A9%20menu") "literal segments are percent-encoded in reverse URLs"
+  expectBody cafe "café"
+  let withQuery ← match context "/v/42?q=a=b?c&flag&empty=&q=+" with
+    | .ok decoded => pure decoded
+    | .error error => throw (IO.userError error.message)
+  check (withQuery.query == #[("q", "a=b?c"), ("flag", ""), ("empty", ""), ("q", "+")])
+    "query decoding keeps separators inside values and retains duplicates"
   check ((routes.fallbackUrl "a/b").toOption.isNone) "forbidden separator in text capture"
   check ((routes.fallbackUrl "").toOption.isNone) "empty text reverse capture"
   check ((routes.url "missing").toOption.isNone) "unknown route name"

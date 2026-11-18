@@ -67,6 +67,17 @@ multiworker invalidation must broadcast it through bounded worker-local queues,
 or use the Redis adapter without an L1 response store. Include a deployment/data
 version in keys when invalidation must survive restarts.
 
+Compute a base key from the checked context and verified scope used by admission
+to remove every stored response variant for that key on the current worker.
+
+```lean
+import LeanWeave.Cache
+
+def invalidateDashboard (store : LeanWeave.Cache.ResponseStore)
+    (checked : LeanWeave.Context) (policy : LeanWeave.Cache.Policy) : IO Unit :=
+  store.invalidateBase (LeanWeave.Cache.responseBaseKey "public:dashboard" checked policy)
+```
+
 `Cache.requestFragment` requires the same per-request admission. Low-level
 `Cache.fragment` remains an explicit-key primitive: include every isolation
 dimension with `Cache.key`. Never share personalized fragments using only a
