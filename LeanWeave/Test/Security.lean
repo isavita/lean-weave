@@ -495,6 +495,21 @@ def securityTests : IO Unit := do
       { context with request := { context.request with headers := context.request.headers.push (header "authorization" "Bearer x") } },
       { context with request := { context.request with headers := context.request.headers.push (header "cookie" "a=b") } } ] do
     check (!Cache.eligibleRequest other) "auth/session cache bypass"
+  for extra in #[header "cOoKiE" "", header "Cache-Control" "MAX-AGE=0",
+      header "Pragma" "NO-CACHE", { name := "Cache-Control", value := ByteArray.mk #[255] }] do
+    let headers := context.request.headers ++ #[header "cache-control" "max-stale", extra]
+    let request := { context.request with headers }
+    check (!Cache.eligibleRequest { context with request }) "request cache bypass checks every field"
+  let withVary := fun (fields : Array LeanNet.HTTP1.Header) => Cache.responseBaseKey "public:test"
+    { context with request := { context.request with headers := context.request.headers ++ fields } }
+    { vary := #["Accept-Encoding"] }
+  check (withVary #[header "Accept-Encoding" "gzip", header "accept-encoding" "br"] ==
+    withVary #[header "accept-encoding" "gzip", header "Accept-Encoding" "br"])
+    "configured Vary key combines ordered fields case-insensitively"
+  check (withVary #[header "accept-encoding" "gzip", header "accept-encoding" "br"] !=
+    withVary #[header "accept-encoding" "br", header "accept-encoding" "gzip"] &&
+    withVary #[] != withVary #[header "accept-encoding" ""])
+    "configured Vary key distinguishes order and absent fields"
   for extra in [header "set-cookie" "a=b", header "vary" "*", header "cache-control" "private",
       header "cache-control" "no-store", header "connection" "close",
       header "transfer-encoding" "chunked", header "content-range" "bytes 0-1/10"] do

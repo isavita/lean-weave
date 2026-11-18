@@ -27,14 +27,11 @@ structure Policy where
   /-- No cache lookup is allowed until an explicit per-request admission runs. -/
   admit : Option Admission := none
 
-private def tokens (s : String) : Array String :=
-  (s.toLower.splitOn ",").toArray.map (fun p => p.trimAscii.toString)
-
-private def directive (s name : String) : Bool :=
-  (tokens s).any (fun p => ((p.splitOn "=").head!).trimAscii.toString == name)
-
-private def values (headers : Array LeanNet.HTTP1.Header) (name : String) : String :=
-  String.intercalate "," ((headers.filter (fun h => h.name.toLower == name)).toList.map fun h => (String.fromUTF8? h.value).getD "no-store")
+-- Connection parsers already normalize header names. In-process callers may
+-- supply mixed-case names; compare those without making a lowercase copy.
+@[inline] private def fieldNameIs (actual expected : String) : Bool :=
+  actual == expected || (actual.utf8ByteSize == expected.utf8ByteSize &&
+    actual.toSlice.eqIgnoreAsciiCase expected.toSlice)
 
 private def isFieldNameByte (b : UInt8) : Bool :=
   let n := b.toNat
@@ -122,22 +119,26 @@ private def cacheDirectives (headers : Array LeanNet.HTTP1.Header) : Option Cach
             result := { result with sharedForbidden := true }
   return some result
 
-private def asksForRevalidation (ctx : Context) : Bool :=
-  let directives := tokens (values ctx.request.headers "cache-control")
-  directives.any (fun part =>
-    let pieces := part.splitOn "="
-    let name := pieces.head!.trimAscii.toString
-    name == "no-cache" || name == "no-store" ||
-      name == "max-age" || name == "min-fresh") ||
-    directive (values ctx.request.headers "pragma") "no-cache"
+private def asksForRevalidation (value : ByteArray) (cacheControl : Bool) : Bool :=
+  match String.fromUTF8? value with
+  | none => cacheControl
+  | some value => (value.splitOn ",").any fun part =>
+    let name := (part.splitOn "=").head!.trimAscii.toString
+    fieldNameIs name "no-cache" || (cacheControl &&
+      (fieldNameIs name "no-store" || fieldNameIs name "max-age" || fieldNameIs name "min-fresh"))
+
+private def bypassHeader (header : LeanNet.HTTP1.Header) : Bool :=
+  let name := header.name
+  if fieldNameIs name "cache-control" then asksForRevalidation header.value true
+  else if fieldNameIs name "pragma" then asksForRevalidation header.value false
+  else fieldNameIs name "authorization" || fieldNameIs name "cookie" ||
+    fieldNameIs name "range" || fieldNameIs name "if-range" || fieldNameIs name "if-match" ||
+    fieldNameIs name "if-unmodified-since" || fieldNameIs name "if-modified-since"
 
 def eligibleRequest (ctx : Context) : Bool :=
   (ctx.request.method == "GET" || ctx.request.method == "HEAD") && ctx.request.body.isEmpty &&
   ctx.attribute "tenant.cache.enabled" != some "false" && (ctx.attribute "csp.nonce").isNone && !ctx.authenticated &&
-  ctx.sessionId.isNone && ctx.request.clientCertificate.isNone && !(ctx.request.headers.any (fun h => ["authorization", "cookie"].contains h.name.toLower)) &&
-  !(ctx.request.headers.any (fun h => ["range", "if-range", "if-match", "if-unmodified-since",
-    "if-modified-since"].contains h.name.toLower)) &&
-  !asksForRevalidation ctx
+  ctx.sessionId.isNone && ctx.request.clientCertificate.isNone && !ctx.request.headers.any bypassHeader
 
 private def admittedVary? (policy : Policy) (response : Response) : Option (Array String) := do
   let cc ← cacheDirectives response.headers
@@ -155,6 +156,18 @@ private def admittedVary? (policy : Policy) (response : Response) : Option (Arra
 
 def eligibleResponse (policy : Policy) (response : Response) : Bool :=
   (admittedVary? policy response).isSome
+
+private def headerKeyParts (headers : Array LeanNet.HTTP1.Header) (name : String)
+    (parts : Array ByteArray) : Array ByteArray := Id.run do
+  let index := parts.size
+  let mut parts := (parts.push name.toUTF8).push "0".toUTF8
+  let mut count := 0
+  for header in headers do
+    if fieldNameIs header.name name then
+      count := count + 1
+      parts := parts.push header.value
+  if count > 0 then parts := parts.set! (index + 1) (toString count).toUTF8
+  return parts
 
 private def rawHeaderKey (ctx : Context) (name : String) : String :=
   let headers := ctx.request.headers.filter (fun h => h.name.toLower == name.toLower)
@@ -190,10 +203,7 @@ def responseBaseKey (scope : String) (ctx : Context) (policy : Policy := {}) : C
     parts := parts.push value.toUTF8
   parts := parts.push (toString policy.vary.size).toUTF8
   for name in policy.vary do
-    let fields := ctx.request.headers.filter (fun h => h.name.toLower == name.toLower)
-    parts := parts.push name.toLower.toUTF8
-    parts := parts.push (toString fields.size).toUTF8
-    for field in fields do parts := parts.push field.value
+    parts := headerKeyParts ctx.request.headers name.toLower parts
   return CacheKey.ofByteParts parts
 
 private def noAdditionalVary : CacheKey := CacheKey.ofParts #["vary:v2"]
@@ -204,13 +214,8 @@ private def varyFingerprint (ctx : Context) (policy : Policy) (names : Array Str
   let mut parts : Array ByteArray := #[]
   for name in names do
     -- Configured dimensions are already compared by the base key.
-    if policy.vary.any (fun configured => configured == name ||
-        (configured.utf8ByteSize == name.utf8ByteSize &&
-          configured.toSlice.eqIgnoreAsciiCase name.toSlice)) then continue
-    let fields := ctx.request.headers.filter (fun h => h.name.toLower == name)
-    parts := parts.push name.toUTF8
-    parts := parts.push (toString fields.size).toUTF8
-    for field in fields do parts := parts.push field.value
+    if policy.vary.any (fun configured => fieldNameIs configured name) then continue
+    parts := headerKeyParts ctx.request.headers name parts
   if parts.isEmpty then return noAdditionalVary
   return CacheKey.ofByteParts (#["vary:v2".toUTF8] ++ parts)
 
