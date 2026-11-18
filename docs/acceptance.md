@@ -83,6 +83,12 @@ new `response_middleware_request` sample also constructs the middleware action
 on every iteration from an already decoded context. It measured 15,640 ns/op
 and 128 small allocations/op in the same comparison.
 
+The request-header and Vary key changes reduced the median
+`response_middleware_request` allocation count from 128 to 107 per request.
+The prebuilt action fell from 116 to 107, and direct lookup of one key stayed
+at 2. The baseline was `cd35a6f`. Each version used five 50,000-iteration runs
+of `weave-bench` on Apple M2 with Lean 4.35.0.
+
 `multipart_upload_512_kib` decodes a complete request body with one 512 KiB
 binary part. The benchmark limits this sample to 100 iterations. In three
 historical paired Apple M2 runs, median time fell from 59.07 ms to 0.785 ms per
