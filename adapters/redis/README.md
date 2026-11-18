@@ -3,6 +3,11 @@
 Optional Redis adapter for LeanWeave. Import `LeanWeaveRedis`; declarations live
 in `LeanWeave.Redis`. The core package does not load or require this adapter.
 
+For an application using a local checkout, require `lean-weave-redis` with
+`path = "../lean-weave/adapters/redis"` in its `lakefile.toml`. The example below
+connects to Redis at its default `127.0.0.1:6379` endpoint and uses a separate key
+namespace for the app.
+
 For distributed channels, construct a `PubSub.Adapter` on its native owner and
 use `adapter.channel authorize`. The resulting `Realtime.Channel` uses the same
 typed `broadcast` API as a local channel, with WS/SSE subscriptions fed by Redis

@@ -83,15 +83,16 @@ shutdown or start untracked threads that outlive their generation.
 
 ## Reproducible native checks
 
+Install the [core prerequisites](../../docs/getting-started.md#prerequisites)
+and the [test dependencies](../../docs/acceptance.md), then run from the
+repository root.
+
 ```sh
 lake -d adapters/plugins build weave-plugin-fixture
-python -m pip install --index-url https://pypi.org/simple --require-hashes -r scripts/requirements-test.txt
-python adapters/plugins/test/test_reload.py --output docs/platform/plugins-result.json
+lake env .lake/test-venv/bin/python adapters/plugins/test/test_reload.py --output .lake/test-output/plugins.json
 ```
 
-Use an isolated Python environment and a C11 compiler (`CC` overrides the default).
-On Homebrew macOS, prepend the installed zlib pkg-config path to the build as
-used by the other native adapters. Tests compile actual v1/v2/v3, invalid-ABI and
+Use a C11 compiler (`CC` overrides the default). Tests compile actual v1/v2/v3, invalid-ABI and
 failed-start shared libraries. One native listener proves same-path replacement
 without restart, concurrent old deferred/new responses, streaming generation
 retention, reload backpressure before the loader runs, failed reload recovery,

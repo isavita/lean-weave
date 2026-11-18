@@ -19,24 +19,9 @@ and graceful draining retain their transport semantics. `Server.serveWithTranspo
 accepts a native transport provider; `Server.handlers` can also be used directly
 inside lean-net's worker factories.
 
-For TLS, add the optional `lean-net-tls` Lake package from the same lean-net
-revision and its `tls` subdirectory, then:
-
-```lean
-import LeanWeave
-import LeanNetTLS
-
--- `factory : Nat → IO LeanWeave.Handler` and `config : LeanWeave.Server.Config`
--- are application values; validate config before starting the listener.
--- LeanNetTLS.ReactorServer.serveFactory
---   (fun worker => do return LeanWeave.Server.handlers (← factory worker) config)
---   { certificateChain := "chain.pem", privateKey := "key.pem" }
---   config.net config.host config.port
-```
-
-This preserves ALPN, dedicated TLS workers, mTLS and certificate reload. Plaintext
-application continuations remain on their reactor owner. Do not replace lean-net
-with blocking TLS calls from AppM.
+The [TLS adapter quick start](../adapters/tls/README.md) shows the Lake dependency
+and a complete HTTPS entry point. Application continuations remain on their
+reactor owner.
 
 For static assets, prepare `LeanNet.HTTP.Static.Catalog.withCatalog` before
 workers start, then use `HTTP.ReactorServer.serveWorkerFactory`. Inside its
