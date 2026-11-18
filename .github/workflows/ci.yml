@@ -75,7 +75,7 @@ jobs:
         run: lake env python scripts/test_examples.py -v
       - name: Native compressed static files
         run: lake env python scripts/test_static.py -v
-      - name: CLI scaffold and rebuild/restart
+      - name: CLI scaffold, rebuild/restart, and documented quickstart
         run: lake env python scripts/test_tooling.py
       - name: Reproducible allocation and timing sample
         run: lake env python scripts/benchmark.py --iterations 20000 --output benchmarks/ci-results.json
