@@ -112,6 +112,12 @@ class FrameworkWire(unittest.TestCase):
             private = request(b"/cache?q=a", headers=[(b"cookie", b"session=private")])
             self.assertNotEqual(a[2], private[2])
 
+    def test_appm_can_return_a_stream_after_await_on_both_protocols(self):
+        for request in (self.h1, self.h2):
+            status, headers, body = request(b"/deferred-stream")
+            self.assertEqual((status, body), (200, b"deferred stream"))
+            self.assertEqual(int(headers[b"content-length"]), len(body))
+
     def test_dynamic_vary_and_malformed_vary_on_both_protocols(self):
         for label, request in ((b"h1", self.h1), (b"h2", self.h2)):
             path = b"/cache-vary?protocol=" + label

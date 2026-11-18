@@ -47,6 +47,10 @@ private def app (worker : Nat) : IO Handler := do
         return none)
       (fun _ => pure ()) 1000)
   let slow := delay cancellations 300
+  let deferredStream : Handler := fun _ => do
+    AppM.await (pure (some (.ok ()))) (fun _ => pure ()) 1000
+    let body ← Stream.chunks #["deferred".toUTF8, " stream".toUTF8]
+    return Response.streaming body
   let guarded := pipeline #[Middleware.csrf {}] (fun _ => pure (Response.text "protected"))
   let csrfRoute : Handler := fun ctx => guarded { ctx with attributes := #[("csrf", String.ofList (List.replicate 64 'a'))] }
   let hello : String → Handler := fun name _ => pure (Html.toResponse (greeting name))
@@ -60,6 +64,7 @@ private def app (worker : Nat) : IO Handler := do
       makeRoute "GET" "/hello/:name<text>" "hello" (fun c => do hello (← Router.captureText c "name") c),
       makeRoute "GET" "/fast" "fast" fast,
       makeRoute "GET" "/slow" "slow" slow,
+      makeRoute "GET" "/deferred-stream" "deferred-stream" deferredStream,
       makeRoute "GET" "/cache" "cache" cached,
       makeRoute "GET" "/cache-vary" "cache-vary" dynamicVary,
       makeRoute "GET" "/cache-malformed" "cache-malformed" malformedVary,
