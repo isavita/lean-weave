@@ -22,7 +22,7 @@ result = subprocess.run([str(binary), str(a.iterations)], cwd=root, text=True, c
 sources = (["benchmarks/Platform.lean", "LeanWeave/Tenant/Basic.lean", "LeanWeave/Feature/Basic.lean",
     "LeanWeave/Security/Crypto.lean", "LeanWeave/Security/Audit.lean", "LeanWeave/Observability/Trace.lean",
     "LeanWeave/Observability/Logging.lean", "LeanWeave/Realtime/PubSub.lean"] if a.platform else
-    ["benchmarks/Main.lean", "LeanWeave/Core/AppM.lean", "LeanWeave/Core/Decode.lean",
+    ["benchmarks/Main.lean", "LeanWeave/Core/AppM.lean", "LeanWeave/Core/Body.lean", "LeanWeave/Core/Decode.lean",
      "LeanWeave/Core/Types.lean", "LeanWeave/Router/Runtime.lean", "LeanWeave/Html/Basic.lean",
      "LeanWeave/Cache/Store.lean", "LeanWeave/Cache/Response.lean", "LeanWeave/Cache/ResponseStore.lean",
      "LeanWeave/Security/Crypto.lean"])

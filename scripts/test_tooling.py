@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Generate/build/test/list a fresh application and verify successful + failed rebuilds.
-Uses temporary directories and a loopback port. Run after `lake build weave`.
+"""Test the documented quickstart and a fresh scaffold, including rebuilds.
+Uses temporary directories and loopback ports. Run after `lake build weave`.
 """
 from __future__ import annotations
 from contextlib import contextmanager
 import http.client
 import os
 from pathlib import Path
+import re
 import shutil
 import signal
 import socket
@@ -19,10 +20,10 @@ ROOT = Path(__file__).resolve().parents[1]
 WEAVE = ROOT / ".lake/build/bin" / ("weave.exe" if os.name == "nt" else "weave")
 
 
-def response(port):
+def response(port, path="/"):
     client = http.client.HTTPConnection("127.0.0.1", port, timeout=.5)
     try:
-        client.request("GET", "/")
+        client.request("GET", path)
         reply = client.getresponse()
         return reply.status, reply.read()
     except OSError:
@@ -124,6 +125,41 @@ exec "$WEAVE_TEST_REAL_LAKE" "$@"
                 pass
 
 
+def check_documented_quickstart(project):
+    project.mkdir()
+    guide = (ROOT / "docs/getting-started.md").read_text(encoding="utf-8")
+    for filename, language in [("lean-toolchain", "text"), ("lakefile.toml", "toml"), ("Main.lean", "lean")]:
+        blocks = re.findall(rf"(?ms)^`{re.escape(filename)}`\n\n```{language}\n(.*?)^```$", guide)
+        assert len(blocks) == 1, f"quickstart must provide one {filename} block"
+        (project / filename).write_bytes(blocks[0].encode("utf-8"))
+    subprocess.run(["lake", "update"], cwd=project, check=True)
+    subprocess.run(["lake", "build", "app"], cwd=project, check=True)
+
+    binary = project / ".lake/build/bin" / ("app.exe" if os.name == "nt" else "app")
+    with tempfile.TemporaryFile(mode="w+", encoding="utf-8") as log:
+        with subprocess.Popen([str(binary)], cwd=project, stdout=log, stderr=subprocess.STDOUT) as server:
+            def greeting_works():
+                assert server.poll() is None, "documented quickstart server exited"
+                status, body = response(8080, "/hello/Lean")
+                return status == 200 and b"Hello, Lean!" in body
+
+            try:
+                wait_for(greeting_works, "documented quickstart did not return the greeting")
+            except AssertionError:
+                log.seek(0)
+                print(log.read(), file=sys.stderr)
+                raise
+            finally:
+                if server.poll() is None:
+                    server.terminate()
+                    try:
+                        server.wait(timeout=10)
+                    except subprocess.TimeoutExpired:
+                        server.kill()
+                        raise
+    print("PASS documented Git dependency quickstart")
+
+
 def main():
     with tempfile.TemporaryDirectory(prefix="weave-smoke-") as temporary:
         temporary = Path(temporary)
@@ -166,6 +202,7 @@ def main():
             stop_during_build(app, environment, port, temporary)
             print("PASS PID-only launcher stop while rebuilding")
         print("PASS weave new/build/test/routes/dev + rebuild failure preservation + graceful stop")
+        check_documented_quickstart(temporary / "quickstart")
 
 
 if __name__ == "__main__":

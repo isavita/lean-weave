@@ -39,6 +39,11 @@ weave_routes routes where {
   group "/admin" using (tagged) {
     route "GET" "/" as admin => text "admin"
   },
+  group "/api/" {
+    route "GET" "/child/" as apiChild => text "child",
+    resources "/books/" as books => controller
+  },
+  resources "/" as root => controller,
   resources "/posts" as posts => controller
 }
 
@@ -122,6 +127,18 @@ def run : IO Unit := do
   for method in #["GET", "PUT", "PATCH", "DELETE"] do expectBody "/posts/42" "nat:42" method
   expectBody "/posts/42/edit" "nat:42"
   check ((routes.posts.showUrl 17).toOption == some "/posts/17") "typed resource reverse"
+  expectBody "/" "index"
+  expectBody "/" "create" "POST"
+  expectBody "/new" "new"
+  expectBody "/42" "nat:42"
+  check ((routes.root.indexUrl).toOption == some "/" && (routes.root.showUrl 17).toOption == some "/17")
+    "root resource reverse preserves the collection path and joins member paths"
+  expectBody "/api/child/" "child"
+  check ((← request "/api/child").status == 404) "group join preserves the child trailing slash"
+  expectBody "/api/books/" "index"
+  expectBody "/api/books/42/edit" "nat:42"
+  check ((routes.books.indexUrl).toOption == some "/api/books/" &&
+    (routes.books.showUrl 17).toOption == some "/api/books/17") "nested resource reverse keeps one boundary slash"
   check ((routes.numberUrl 3 #[("q", "a & b")]).toOption == some "/v/3?q=a%20%26%20b") "query encoding"
   check ((routes.fallbackUrl "a?# b").toOption == some "/v/a%3F%23%20b") "capture segment encoding"
   let cafe ← match routes.cafeUrl with

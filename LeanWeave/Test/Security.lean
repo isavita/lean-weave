@@ -348,6 +348,20 @@ def securityTests : IO Unit := do
   let post := { context with request := { context.request with method := "POST", headers := context.request.headers.push (header "content-type" "application/x-www-form-urlencoded"), body := ("_csrf=" ++ one.csrf).toUTF8 }, attributes := #[("csrf", one.csrf)] }
   let next : Handler := fun _ => pure (Response.text "ok")
   check ((← status (Middleware.csrf {} next) post) == 200) "valid CSRF token"
+  let csrf := Middleware.csrf {} next
+  let tokenHeader := header "x-csrf-token" one.csrf
+  let headerPost := { post with request := { post.request with
+    headers := context.request.headers.push tokenHeader, body := ByteArray.empty } }
+  check ((← status csrf headerPost) == 200) "valid standalone CSRF header"
+  for field in #[header "X-CSRF-Token" one.csrf, { name := "x-csrf-token", value := ByteArray.mk #[255] }] do
+    let repeated := { headerPost with request := { headerPost.request with headers := headerPost.request.headers.push field } }
+    check ((← status csrf repeated) == 400) "CSRF rejects repeated token fields"
+  let invalidHeader := { post with request := { post.request with
+    headers := post.request.headers.push { name := "x-csrf-token", value := ByteArray.mk #[255] } } }
+  check ((← status csrf invalidHeader) == 400) "CSRF rejects an undecodable token header"
+  let repeatedContentType := { post with request := { post.request with
+    headers := post.request.headers.push (header "Content-Type" "application/x-www-form-urlencoded") } }
+  check ((← status csrf repeatedContentType) == 400) "CSRF requires one Content-Type for form tokens"
   let uploadToken := ("--csrf\r\nContent-Disposition: form-data; name=\"_csrf\"\r\n\r\n" ++ one.csrf ++ "\r\n--csrf--\r\n").toUTF8
   let upload := { post with request := { post.request with headers := #[header "host" "example.test", header "content-type" "multipart/form-data; boundary=\"csrf\""], body := uploadToken } }
   check ((← status (Middleware.csrf {} next) upload) == 200) "multipart browser form CSRF token"
@@ -364,19 +378,63 @@ def securityTests : IO Unit := do
   check (counts.requests == 1 && counts.errors == 1 && counts.cancelled == 0 && counts.active == 0) "metrics errors are completed requests"
   let preflightHead : LeanNet.HTTP1.RequestHead := { method := "POST", target := "/".toUTF8, headers := #[header "origin" "https://evil.test"] }
   check (!(Middleware.sameOrigin "https://example.test" (fun _ => true) false preflightHead).isOk) "cross origin early rejection"
+  let optionalOrigin := Middleware.sameOrigin "https://example.test" (allowMissing := true)
+  check ((optionalOrigin { preflightHead with headers := #[] }).isOk) "origin policy permits absent Origin when configured"
+  let opaqueOrigin : LeanNet.HTTP1.Header := { name := "Origin", value := ByteArray.mk #[255] }
+  check ((optionalOrigin { preflightHead with headers := #[opaqueOrigin] }).toOption.isNone)
+    "origin policy distinguishes invalid Origin from missing Origin"
   let proxyContext := { context with request := { context.request with headers := context.request.headers.push (header "x-forwarded-host" "evil.test") } }
   let echoHost : Handler := fun c => pure (Response.text c.host)
   let response ← ok (← (Middleware.trustedProxies (fun _ => false) echoHost proxyContext).run)
   check (String.fromUTF8! response.body == "example.test") "untrusted forwarded host ignored"
   let duplicateProxy := { proxyContext with request := { proxyContext.request with headers := proxyContext.request.headers.push (header "x-forwarded-host" "second.test") } }
   check ((← status (Middleware.trustedProxies (fun _ => true) next) duplicateProxy) == 400) "repeated proxy headers rejected"
+  let proxyScheme := Middleware.trustedProxies (fun _ => true) (fun c =>
+    pure (Response.text ((c.attribute "scheme").getD "")))
+  for secure in #[false, true] do
+    let transport : LeanNet.HTTP1.TransportInfo := { secure, peer := ByteArray.mk #[127, 0, 0, 1] }
+    let request := { context.request with transport := some transport }
+    let direct ← ok (← (proxyScheme { context with request }).run)
+    check (direct.body == (if secure then "https" else "http").toUTF8) "proxy scheme falls back to transport security"
+    let forwarded := if secure then "http" else "https"
+    let forwardedRequest := { request with headers := request.headers.push (header "x-forwarded-proto" forwarded) }
+    let proxied ← ok (← (proxyScheme { context with request := forwardedRequest }).run)
+    check (proxied.body == forwarded.toUTF8) "proxy scheme honors the explicit forwarded protocol"
   let resolved := pipeline #[Middleware.authenticate (fun _ => pure (some "first")), Middleware.authenticate (fun _ => pure (some "second"))] (fun c => pure (Response.text ((c.attribute "principal").getD "")))
   let principal ← ok (← (resolved context).run)
   check (String.fromUTF8! principal.body == "second") "later principal replaces prior identity"
   let corsContext := { context with request := { context.request with headers := context.request.headers.push (header "origin" "https://good.test") } }
   let varying : Handler := fun _ => pure { headers := #[header "vary" "Accept", header "vary" "X-Tenant"] }
-  let corsResponse ← ok (← (Middleware.cors { origins := #["https://good.test"] } varying corsContext).run)
+  let cors := Middleware.cors { origins := #["https://good.test"] }
+  let corsResponse ← ok (← (cors varying corsContext).run)
   check (corsResponse.getHeader "vary" == some "Accept, X-Tenant, Origin") "CORS preserves all Vary dimensions"
+  let withoutOrigin ← ok (← (cors varying context).run)
+  check (withoutOrigin.getHeader "vary" == some "Accept, X-Tenant, Origin" &&
+    (withoutOrigin.getHeader "access-control-allow-origin").isNone) "CORS varies responses without Origin"
+  let withExistingOrigin : Handler := fun _ => pure { headers := #[header "vary" "Accept, origin", header "Vary" "Origin, X-Tenant"] }
+  let deduplicated ← ok (← (cors withExistingOrigin corsContext).run)
+  check (deduplicated.getHeader "vary" == some "Accept, origin, X-Tenant") "CORS adds Origin only once"
+  let varyAll : Handler := fun _ => pure { headers := #[header "vary" "Accept", header "Vary" " * "] }
+  for ctx in #[context, corsContext] do
+    let wildcard ← ok (← (cors varyAll ctx).run)
+    check (wildcard.getHeader "vary" == some "*") "CORS preserves the standalone Vary wildcard"
+  let preflight := { corsContext with request := { corsContext.request with
+    method := "OPTIONS"
+    headers := corsContext.request.headers ++ #[header "access-control-request-method" "POST",
+      header "access-control-request-headers" "content-type"] } }
+  let preflightResponse ← ok (← (cors varying preflight).run)
+  check (preflightResponse.status == 204 && preflightResponse.getHeader "vary" ==
+    some "Access-Control-Request-Method, Access-Control-Request-Headers, Origin") "CORS varies preflight responses"
+  let extendPreflight := fun (field : LeanNet.HTTP1.Header) =>
+    { preflight with request := { preflight.request with headers := preflight.request.headers.push field } }
+  check ((← status (cors varying) (extendPreflight (header "Access-Control-Request-Headers" " X-CSRF-Token "))) == 204)
+    "CORS accepts allowed names in split list-valued fields"
+  check ((← status (cors varying) (extendPreflight (header "Access-Control-Request-Headers" "x-custom"))) == 403)
+    "CORS checks every requested header field against the policy"
+  check ((← status (cors varying) (extendPreflight (header "Access-Control-Request-Method" "POST"))) == 400)
+    "CORS requires a single requested method field"
+  check ((← status (cors varying) (extendPreflight { name := "access-control-request-headers", value := ByteArray.mk #[255] })) == 400)
+    "CORS rejects an undecodable requested header field"
   let cache ← Cache.Store.new { maxEntries := 2, maxBytes := 256, maxEntryBytes := 128, maxInFlight := 1 }
   let _ ← cache.put "a" "one".toUTF8 10 100
   let _ ← cache.put "b" "two".toUTF8 10 100
@@ -461,6 +519,21 @@ def securityTests : IO Unit := do
       { context with request := { context.request with headers := context.request.headers.push (header "authorization" "Bearer x") } },
       { context with request := { context.request with headers := context.request.headers.push (header "cookie" "a=b") } } ] do
     check (!Cache.eligibleRequest other) "auth/session cache bypass"
+  for extra in #[header "cOoKiE" "", header "Cache-Control" "MAX-AGE=0",
+      header "Pragma" "NO-CACHE", { name := "Cache-Control", value := ByteArray.mk #[255] }] do
+    let headers := context.request.headers ++ #[header "cache-control" "max-stale", extra]
+    let request := { context.request with headers }
+    check (!Cache.eligibleRequest { context with request }) "request cache bypass checks every field"
+  let withVary := fun (fields : Array LeanNet.HTTP1.Header) => Cache.responseBaseKey "public:test"
+    { context with request := { context.request with headers := context.request.headers ++ fields } }
+    { vary := #["Accept-Encoding"] }
+  check (withVary #[header "Accept-Encoding" "gzip", header "accept-encoding" "br"] ==
+    withVary #[header "accept-encoding" "gzip", header "Accept-Encoding" "br"])
+    "configured Vary key combines ordered fields case-insensitively"
+  check (withVary #[header "accept-encoding" "gzip", header "accept-encoding" "br"] !=
+    withVary #[header "accept-encoding" "br", header "accept-encoding" "gzip"] &&
+    withVary #[] != withVary #[header "accept-encoding" ""])
+    "configured Vary key distinguishes order and absent fields"
   for extra in [header "set-cookie" "a=b", header "vary" "*", header "cache-control" "private",
       header "cache-control" "no-store", header "connection" "close",
       header "transfer-encoding" "chunked", header "content-range" "bytes 0-1/10"] do

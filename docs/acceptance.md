@@ -35,9 +35,11 @@ RST/GOAWAY); those belong to lean-net's protocol acceptance suite.
 `test_examples.py` covers all four apps over both protocols: pages/XSS/routes,
 login/CSRF/session rotation/old-cookie rejection/flash/logout, bounded CRUD and
 revision conflicts, cached dashboard isolation and validators. `test_tooling.py`
-creates a fresh application, builds/tests/lists routes, observes a real
-rebuild/restart, preserves the old process on a compilation error, recovers and
-stops gracefully.
+builds the exact [getting-started](getting-started.md) Git dependency example
+and checks its greeting on port 8080. It also scaffolds a fresh application,
+builds, tests, and lists its routes, observes a live rebuild, checks that a
+compilation error preserves the running process, and verifies recovery and
+graceful shutdown.
 
 The optional adapter test directories contain real-server and controlled-wire
 acceptance layers with explicit bounds, cancellation and TLS checks. PostgreSQL
@@ -66,8 +68,8 @@ microbenchmarks, not production throughput, TLS, HTTP/2 network latency or a
 comparison against another framework. Run on controlled hardware and repeat
 samples for comparisons; CI uploads measurements without flaky timing thresholds.
 
-A paired Apple M2 sample used the median of three 50,000-iteration runs per
-version, with Lean 4.35.0 and the same workloads.
+This historical Apple M2 comparison used the median of three 50,000-iteration
+runs per version, with Lean 4.35.0 and the same workloads.
 
 | Sample | Before, ns/op | After, ns/op | Before, small allocations/op | After, small allocations/op |
 | --- | ---: | ---: | ---: | ---: |
@@ -80,6 +82,19 @@ The baseline was `319505b` with the populated-cache workload backported. The
 new `response_middleware_request` sample also constructs the middleware action
 on every iteration from an already decoded context. It measured 15,640 ns/op
 and 128 small allocations/op in the same comparison.
+
+The request-header and Vary key changes reduced the median
+`response_middleware_request` allocation count from 128 to 107 per request.
+The prebuilt action fell from 116 to 107, and direct lookup of one key stayed
+at 2. The baseline was `cd35a6f`. Each version used five 50,000-iteration runs
+of `weave-bench` on Apple M2 with Lean 4.35.0.
+
+`multipart_upload_512_kib` decodes a complete request body with one 512 KiB
+binary part. The benchmark limits this sample to 100 iterations. In three
+historical paired Apple M2 runs, median time fell from 59.07 ms to 0.785 ms per
+upload after replacing the body parser in the same native benchmark. Lean small
+allocations increased from 63.02 to 66.02 per upload. These counters exclude
+the native arrays removed from each delimiter search step.
 
 ## Network microbenchmark
 

@@ -34,7 +34,7 @@ def trustedProxies (trustedPeer : Context → Bool := fun _ => false) : Middlewa
     | some value => match normalizeHost value with
       | .ok host => pure host
       | .error message => throw { status := 400, message }
-  let scheme := (ctx.header "x-forwarded-proto").getD "https"
+  let scheme := (ctx.header "x-forwarded-proto").getD (if ctx.secure then "https" else "http")
   unless scheme == "http" || scheme == "https" do throw { status := 400, message := "invalid forwarded protocol" }
   next { ctx with host, attributes := (ctx.attributes.filter (fun p => p.1 != "scheme")).push ("scheme", scheme) }
 
@@ -72,14 +72,27 @@ def sessionAuth : Middleware := authenticate (fun ctx => pure (ctx.attribute "se
 private def unsafeMethod (method : String) : Bool :=
   !["GET", "HEAD", "OPTIONS"].contains method
 
+/-- Keep an absent field distinct from one with repeated or undecodable values. -/
+private def singletonHeader [Monad m] [MonadExceptOf AppError m]
+    (headers : Array LeanNet.HTTP1.Header) (name : String) : m (Option String) := do
+  let mut value := none
+  for header in headers do
+    if header.name.toLower != name then continue
+    if value.isSome then throw { status := 400, message := s!"repeated {name} header" }
+    let some decoded := String.fromUTF8? header.value
+      | throw { status := 400, message := s!"invalid {name} header" }
+    value := some decoded
+  return value
+
 /-- Validate the token after decoding the body. Header checks alone cannot verify form CSRF. -/
 def csrf (limits : Body.Limits := {}) : Middleware := fun next ctx => do
   if !unsafeMethod ctx.request.method then return ← next ctx
   let some expected := ctx.attribute "csrf" | throw { status := 403, message := "CSRF session required" }
-  let token ← match ctx.header "x-csrf-token" with
+  let headerToken ← singletonHeader ctx.request.headers "x-csrf-token"
+  let token ← match headerToken with
     | some token => pure token
     | none =>
-      let contentType := (ctx.header "content-type").getD ""
+      let contentType := (← singletonHeader ctx.request.headers "content-type").getD ""
       let media := (contentType.splitOn ";").head!.trimAscii.toString.toLower
       let values ← if media == "application/x-www-form-urlencoded" then do
         let fields ← match Body.form ctx.request.body limits with
@@ -117,26 +130,47 @@ structure Cors where
   headers : Array String := #["content-type", "x-csrf-token"]
   credentials : Bool := false
 
-/-- Exact-origin CORS; wildcard credentialed origins are rejected by construction at use. -/
+private def varyOnOrigin (response : Response) : Response := Id.run do
+  let mut names := #[]
+  let mut hasOrigin := false
+  for field in response.headers do
+    if field.name.toLower != "vary" then continue
+    let some value := String.fromUTF8? field.value | return response.withHeader "vary" "*"
+    for token in value.splitOn "," do
+      let name := token.trimAscii.toString
+      if name == "*" then return response.withHeader "vary" "*"
+      if name.isEmpty then continue
+      if name.toLower == "origin" then
+        if hasOrigin then continue
+        hasOrigin := true
+      names := names.push name
+  unless hasOrigin do names := names.push "Origin"
+  return response.withHeader "vary" (String.intercalate ", " names.toList)
+
+/-- Exact-origin CORS. Successful responses vary on Origin, including when the
+    request omits it. Preflight responses also vary on the requested method and headers. -/
 def cors (policy : Cors) : Middleware := fun next ctx => do
-  let rawOrigin := ctx.request.headers.filter (fun h => h.name.toLower == "origin")
-  if rawOrigin.size > 1 || rawOrigin.any (fun h => (String.fromUTF8? h.value).isNone) then
-    throw { status := 400, message := "invalid or repeated Origin" }
-  let some origin := ctx.header "origin" | return ← next ctx
+  let some origin ← singletonHeader ctx.request.headers "origin" | return varyOnOrigin (← next ctx)
   unless policy.origins.contains origin && origin != "*" do
     throw { status := 403, message := "origin not allowed" }
-  let response ← if ctx.request.method == "OPTIONS" && (ctx.header "access-control-request-method").isSome then do
-    let requested := (ctx.header "access-control-request-method").getD ""
-    unless policy.methods.contains requested do throw { status := 403, message := "CORS method not allowed" }
-    for name in ((ctx.header "access-control-request-headers").getD "").splitOn "," do
-      unless name.trimAscii.toString.isEmpty || policy.headers.contains name.trimAscii.toString.toLower do
-        throw { status := 403, message := "CORS header not allowed" }
-    pure (({ status := 204 } : Response).withHeader "access-control-allow-methods" (String.intercalate ", " policy.methods.toList)
-      |>.withHeader "access-control-allow-headers" (String.intercalate ", " policy.headers.toList))
-    else next ctx
-  let vary := String.intercalate ", " ((response.headers.filter (fun h => h.name.toLower == "vary")).toList.map fun h => (String.fromUTF8? h.value).getD "*")
-  let response := response.withHeader "access-control-allow-origin" origin
-    |>.withHeader "vary" (if vary.isEmpty then "Origin" else vary ++ ", Origin")
+  let requestedMethod ← if ctx.request.method == "OPTIONS" then
+    singletonHeader ctx.request.headers "access-control-request-method" else pure none
+  let response ← match requestedMethod with
+    | none => next ctx
+    | some requested => do
+      unless policy.methods.contains requested do throw { status := 403, message := "CORS method not allowed" }
+      for field in ctx.request.headers do
+        if field.name.toLower != "access-control-request-headers" then continue
+        let some value := String.fromUTF8? field.value
+          | throw { status := 400, message := "invalid access-control-request-headers header" }
+        for item in value.split ',' do
+          let name := item.trimAscii.toString.toLower
+          unless name.isEmpty || policy.headers.contains name do
+            throw { status := 403, message := "CORS header not allowed" }
+      pure (({ status := 204 } : Response).withHeader "access-control-allow-methods" (String.intercalate ", " policy.methods.toList)
+        |>.withHeader "access-control-allow-headers" (String.intercalate ", " policy.headers.toList)
+        |>.withHeader "vary" "Access-Control-Request-Method, Access-Control-Request-Headers")
+  let response := (varyOnOrigin response).withHeader "access-control-allow-origin" origin
   return if policy.credentials then response.withHeader "access-control-allow-credentials" "true" else response
 
 /-- Header policies run before a decoded body exists. Scope them using head method/target. -/
@@ -145,11 +179,9 @@ abbrev HeaderCheck := LeanNet.HTTP1.RequestHead → Except AppError Unit
 def sameOrigin (origin : String) (scope : LeanNet.HTTP1.RequestHead → Bool := fun _ => true)
     (allowMissing : Bool := false) : HeaderCheck := fun head => do
   if !scope head || !unsafeMethod head.method then return
-  if (head.headers.filter (fun h => h.name.toLower == "origin")).size > 1 then
-    throw { status := 400, message := "multiple Origin headers" }
-  match header? head.headers "origin" with
-  | some value => unless value == origin do throw { status := 403, message := "cross-origin request rejected" }
-  | none => unless allowMissing do throw { status := 403, message := "Origin required" }
+  let some value ← singletonHeader head.headers "origin" |
+    if allowMissing then return else throw { status := 403, message := "Origin required" }
+  unless value == origin do throw { status := 403, message := "cross-origin request rejected" }
 
 def allowedHosts (hosts : Array String) : HeaderCheck := fun head => do
   let values := head.headers.filter (fun h => h.name.toLower == "host")
