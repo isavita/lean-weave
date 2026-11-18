@@ -74,7 +74,7 @@ private def tracing : IO Unit := do
   check ((← tracer.stats).pending == 1) "automatic real job span"
 
 private def cacheIsolation : IO Unit := do
-  let store ← Cache.Store.new
+  let store ← Cache.ResponseStore.new
   let ctx ← require LeanWeave.Test.context
   let ctx := { ctx with host := "example.test", tenant := "alpha", routeName := "dashboard", attributes := #[("tenant.config.revision", "1"),("feature.variant", "a")] }
   check (Cache.responseKey { ctx with request := { ctx.request with target := "/dashboard?q=a+b".toUTF8 } } {} !=
@@ -100,7 +100,7 @@ private def cspCacheIsolation : IO Unit := do
   let policy ← require (Security.Csp.Policy.parse "default-src 'self'; script-src 'nonce'; object-src 'none'; base-uri 'self'")
   let origin : Handler := fun ctx => pure ((Response.text ((Security.Csp.nonce ctx).getD "missing")).withHeader "cache-control" "public, max-age=60")
   for outside in [true,false] do
-    let store ← Cache.Store.new
+    let store ← Cache.ResponseStore.new
     let cachePolicy : Cache.Policy := { admit := some (fun ctx => pure (.cache ctx "public:csp")) }
     let handler := if outside then Cache.middleware store cachePolicy (Security.Csp.middleware policy origin)
       else Security.Csp.middleware policy (Cache.middleware store cachePolicy origin)
@@ -109,7 +109,7 @@ private def cspCacheIsolation : IO Unit := do
     check (first.body != second.body) "CSP/cache middleware order cannot reuse a nonce"
     let nonce := String.fromUTF8! second.body
     check ((((second.getHeader "content-security-policy").getD "").splitOn ("'nonce-" ++ nonce ++ "'")).length == 2) "cached body/header nonce mismatch"
-    check ((← store.state.get).entries.isEmpty) "nonce-bearing response was stored"
+    check ((← store.stats).entries == 0) "nonce-bearing response was stored"
   let store ← Cache.Store.new
   let fragment : Handler := fun ctx => do
     let bytes ← Cache.requestFragment store ctx "nonce" (fun c => pure ((Security.Csp.nonce c).getD "missing").toUTF8)

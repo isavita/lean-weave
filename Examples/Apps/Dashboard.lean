@@ -19,7 +19,11 @@ private def dashboard (fragments : Cache.Store) (generations : IO.Ref Nat) : Han
 /-- Both caches are worker-owned and bounded. A restart/expiry drops local values;
 no cross-worker coherence is claimed. Host, query, locale and Vary separate entries. -/
 def factory : Factory := fun worker => do
-  let responses ← Cache.Store.new { maxEntries := 128, maxBytes := 256 * 1024, maxEntryBytes := 32 * 1024 }
+  let responses ← Cache.ResponseStore.new {
+    maxEntries := 128
+    maxBytes := 256 * 1024
+    maxEntryBytes := 32 * 1024
+  }
   let fragments ← Cache.Store.new { maxEntries := 64, maxBytes := 64 * 1024, maxEntryBytes := 8192 }
   let generations ← IO.mkRef 0
   let addWorker : Middleware := fun next ctx => next { ctx with attributes := ctx.attributes.push ("worker", toString worker) }

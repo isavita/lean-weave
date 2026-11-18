@@ -11,6 +11,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import threading
 import time
 
 MAX_FILES = 10_000
@@ -42,7 +43,10 @@ def stop(child: subprocess.Popen | None) -> None:
     if child is None or child.poll() is not None:
         return
     if os.name == "posix":
-        os.killpg(child.pid, signal.SIGTERM)
+        try:
+            os.killpg(child.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
     else:
         try:
             child.send_signal(signal.CTRL_BREAK_EVENT)
@@ -52,7 +56,10 @@ def stop(child: subprocess.Popen | None) -> None:
         child.wait(timeout=DRAIN_SECONDS)
     except subprocess.TimeoutExpired:
         if os.name == "posix":
-            os.killpg(child.pid, signal.SIGKILL)
+            try:
+                os.killpg(child.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
         else:
             child.kill()
         child.wait()
@@ -76,7 +83,7 @@ def remove_snapshot(path: Path | None) -> None:
             time.sleep(.05)
 
 
-def run(target: str) -> int:
+def run(target: str, parent_pipe: bool = False) -> int:
     if not target or any(c not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_" for c in target):
         raise ValueError("target must be a simple Lake executable name")
     root = Path.cwd()
@@ -90,10 +97,26 @@ def run(target: str) -> int:
         nonlocal stopping
         stopping = True
 
+    def watch_parent():
+        nonlocal stopping
+        try:
+            while os.read(sys.stdin.fileno(), 1):
+                pass
+        except OSError:
+            pass
+        stopping = True
+
     signal.signal(signal.SIGINT, on_signal)
     signal.signal(signal.SIGTERM, on_signal)
     if os.name == "nt":
         signal.signal(signal.SIGBREAK, on_signal)
+    if parent_pipe:
+        threading.Thread(target=watch_parent, daemon=True).start()
+    # Keep the launcher pipe exclusively for the watcher. Direct script calls
+    # retain their existing inherited stdin for the build and application.
+    child_stdin = subprocess.DEVNULL if parent_pipe else None
+    child_group = dict(start_new_session=os.name == "posix",
+                       creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0)
     previous = None
     try:
         while not stopping:
@@ -101,11 +124,16 @@ def run(target: str) -> int:
             if current != previous:
                 previous = current
                 print(f"[weave] building {target}", flush=True)
+                build = subprocess.Popen(["lake", "build", target], stdin=child_stdin, **child_group)
+                deadline = time.monotonic() + BUILD_TIMEOUT_SECONDS
                 try:
-                    build = subprocess.run(["lake", "build", target], timeout=BUILD_TIMEOUT_SECONDS)
-                except subprocess.TimeoutExpired:
-                    print("[weave] build timeout; application preserved", flush=True)
-                    continue
+                    while not stopping and build.poll() is None and time.monotonic() < deadline:
+                        time.sleep(.1)
+                    if not stopping and build.poll() is None:
+                        print("[weave] build timeout; application preserved", flush=True)
+                        continue
+                finally:
+                    stop(build)
                 if stopping:
                     break
                 if build.returncode == 0:
@@ -126,8 +154,10 @@ def run(target: str) -> int:
                     child_snapshot = staged_snapshot
                     staged_snapshot = None
                     print(f"[weave] starting {target}", flush=True)
-                    child = subprocess.Popen([str((child_snapshot or path).resolve())], start_new_session=os.name == "posix",
-                                             creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0)
+                    if stopping:
+                        break
+                    child = subprocess.Popen([str((child_snapshot or path).resolve())],
+                                             stdin=child_stdin, **child_group)
                 else:
                     print("[weave] build failed; application preserved", flush=True)
             time.sleep(POLL_SECONDS)
@@ -144,7 +174,8 @@ def run(target: str) -> int:
 
 if __name__ == "__main__":
     try:
-        raise SystemExit(run(sys.argv[1] if len(sys.argv) > 1 else "app"))
+        target = sys.argv[1] if len(sys.argv) > 1 else "app"
+        raise SystemExit(run(target, parent_pipe=sys.argv[2:] == ["--parent-pipe"]))
     except (OSError, RuntimeError, ValueError) as error:
         print(f"weave dev: {error}", file=sys.stderr)
         raise SystemExit(1)

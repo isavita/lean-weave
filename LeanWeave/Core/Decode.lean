@@ -12,23 +12,28 @@ private def hex? (c : UInt8) : Option Nat :=
 /-- Strict one-pass percent decoding. Form mode additionally decodes `+`. -/
 def percentDecode (s : String) (form : Bool := false) : Except String String := do
   let bytes := s.toUTF8
-  let mut out := ByteArray.empty
   let mut i := 0
-  for _ in [:bytes.size] do
-    if i < bytes.size then
-      let c := bytes[i]!
-      if c == 37 then
-        if i + 2 >= bytes.size then throw "incomplete percent escape"
-        let some a := hex? bytes[i+1]! | throw "invalid percent escape"
-        let some b := hex? bytes[i+2]! | throw "invalid percent escape"
-        let decoded := (a*16+b).toUInt8
-        if decoded == 0 then throw "NUL is forbidden"
-        out := out.push decoded
-        i := i + 3
-      else
-        if c == 0 then throw "NUL is forbidden"
-        out := out.push (if form && c == 43 then 32 else c)
-        i := i + 1
+  while i < bytes.size do
+    let c := bytes[i]!
+    if c == 0 then throw "NUL is forbidden"
+    if c == 37 || (form && c == 43) then break
+    i := i + 1
+  if i == bytes.size then return s
+  let mut out := bytes.copySlice 0 (ByteArray.emptyWithCapacity bytes.size) 0 i false
+  while i < bytes.size do
+    let c := bytes[i]!
+    if c == 37 then
+      if i + 2 >= bytes.size then throw "incomplete percent escape"
+      let some a := hex? bytes[i+1]! | throw "invalid percent escape"
+      let some b := hex? bytes[i+2]! | throw "invalid percent escape"
+      let decoded := (a*16+b).toUInt8
+      if decoded == 0 then throw "NUL is forbidden"
+      out := out.push decoded
+      i := i + 3
+    else
+      if c == 0 then throw "NUL is forbidden"
+      out := out.push (if form && c == 43 then 32 else c)
+      i := i + 1
   let some text := String.fromUTF8? out | throw "invalid UTF-8"
   return text
 
@@ -49,14 +54,17 @@ def percentEncode (s : String) : String := Id.run do
 def decodePairs (s : String) (maxFields : Nat := 128) (maxFieldBytes : Nat := 8192)
     (form : Bool := true) : Except String (Array (String × String)) := do
   if s.isEmpty then return #[]
-  let parts := s.splitOn "&"
-  if parts.length > maxFields then throw "too many fields"
-  parts.toArray.mapM fun part => do
+  let mut result := #[]
+  for part in s.split '&' do
+    if result.size >= maxFields then throw "too many fields"
     if part.utf8ByteSize > maxFieldBytes then throw "field too large"
-    let parts := part.splitOn "="
-    let key ← percentDecode (parts.head!) form
-    let value ← percentDecode (String.intercalate "=" parts.tail!) form
-    return (key, value)
+    let (name, value) := match part.find? '=' with
+      | none => (part.toString, "")
+      | some separator => ((part.sliceTo separator).toString, (part.sliceFrom separator.next!).toString)
+    let key ← percentDecode name form
+    let value ← percentDecode value form
+    result := result.push (key, value)
+  return result
 
 /-- Lowercase authority. Ports remain part of host matching; userinfo and delimiters are rejected. -/
 def normalizeHost (host : String) : Except String String := do
@@ -72,8 +80,9 @@ def Context.fromRequest (request : LeanNet.HTTP1.Request) : Except AppError Cont
   let serverOptions := target == "*" && request.method == "OPTIONS"
   if !serverOptions && (!target.startsWith "/" || target.startsWith "//" || target.contains '#') then
     throw (fail "expected origin-form request target")
-  let pieces := target.splitOn "?"
-  let pathText := pieces.head!
+  let (pathText, queryText) := match target.find? '?' with
+    | none => (target, "")
+    | some separator => ((target.sliceTo separator).toString, (target.sliceFrom separator.next!).toString)
   let mut path := #[]
   if !serverOptions && pathText != "/" then
     for segment in (pathText.drop 1).toString.splitOn "/" do
@@ -81,7 +90,7 @@ def Context.fromRequest (request : LeanNet.HTTP1.Request) : Except AppError Cont
       if decoded.contains '/' || decoded.contains '\\' || decoded == "." || decoded == ".." then
         throw (fail "invalid path segment")
       path := path.push decoded
-  let query ← (decodePairs (String.intercalate "?" pieces.tail!) 128 8192 false).mapError fail
+  let query ← (decodePairs queryText 128 8192 false).mapError fail
   let hosts := request.headers.filter (fun h => h.name.toLower == "host")
   if hosts.size != 1 then throw (fail "exactly one Host header is required")
   let some hostText := String.fromUTF8? hosts[0]!.value | throw (fail "invalid host")

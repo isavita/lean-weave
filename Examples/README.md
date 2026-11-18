@@ -1,10 +1,9 @@
 # Runnable LeanWeave applications
 
-Build from the repository root with Lean 4.35.0, zlib and Brotli development
-libraries installed. On macOS, select Homebrew zlib before building:
+Install the [native prerequisites](../docs/getting-started.md#prerequisites)
+and build from the repository root.
 
 ```sh
-export PKG_CONFIG_PATH="$(brew --prefix zlib)/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
 lake build weave weave-pages weave-forms weave-crud weave-dashboard
 ```
 
@@ -13,12 +12,18 @@ Each application accepts `--routes` and uses `WEAVE_HOST` (default `127.0.0.1`),
 `WEAVE_APP_TIMEOUT_MS` and `WEAVE_APP_RETAINED_BYTES`. Shutdown uses lean-net's
 graceful drain.
 
-| Application | Run | Demonstrates |
+| Application | Run | Try at `http://127.0.0.1:8080` |
 | --- | --- | --- |
-| Pages | `lake exe weave-pages` | Compile-time named routes, typed captures, safe HTML, compiled templates, HTML/JSON negotiation, versioned stylesheet URL |
-| Forms/login | `WEAVE_DEMO_PASSWORD='a-long-demo-secret' lake exe weave-forms` | Form validation, field errors, CSRF, session expiry, login ID/token rotation, authorization, flash consumption, logout |
-| CRUD | `lake exe weave-crud` | Bounded shared state, create/read/update/delete, JSON and browser forms, CSRF, optimistic revision conflicts |
-| Dashboard | `lake exe weave-dashboard` | Worker-local bounded response/fragment caches, isolation dimensions, ETags, conditional GET and HEAD metadata |
+| [Pages](Apps/Pages.lean) | `lake exe weave-pages` | Open `/` for the layout and versioned stylesheet. Visit `/hello/Lean` for a typed route using a compiled template. |
+| [Forms/login](Apps/Forms.lean) | `WEAVE_DEMO_PASSWORD='a-long-demo-secret' lake exe weave-forms` | Open `/login`, sign in as `demo` with the configured password, then sign out from `/account`. |
+| [CRUD](Apps/Crud.lean) | `lake exe weave-crud` | Open `/posts`, create a post, then edit or delete it. Each save checks the matching revision. |
+| [Dashboard](Apps/Dashboard.lean) | `lake exe weave-dashboard` | Refresh `/` within two seconds to see a reused response. Change the query string to see a new cache entry. |
+
+The pages and dashboard examples also accept `Accept: application/json` at
+`/hello/Lean` and `/`, respectively. For the dashboard, use `curl -I` with the
+same query string and `Accept` header to see the cached representation's
+headers. Pass its ETag as `If-None-Match` to receive a bodyless 304 while the
+entry is fresh.
 
 Use a separate port when running applications together. The login app has one
 configured demo account, `demo`; it requires `WEAVE_DEMO_PASSWORD` of at least
@@ -26,51 +31,38 @@ configured demo account, `demo`; it requires `WEAVE_DEMO_PASSWORD` of at least
 The CRUD board is public shared sample data, with at most 256 posts and 256 bytes
 per title. Updates require the last observed `revision`; stale writes return 409.
 
-The HTTP form examples explicitly select a development cookie named `weave_dev`
-with HttpOnly and SameSite=Lax. LeanWeave's session defaults use Secure and the
-`__Host-weave` name. Use the default secure configuration with TLS in deployed
-applications. Unsafe form/CRUD requests must carry an exact matching Origin;
-for the default listener that is `http://127.0.0.1:8080`.
+Keep the forms and CRUD examples on loopback. They use an HTTP development
+cookie named `weave_dev` with HttpOnly and SameSite=Lax. Deployed applications
+should use TLS and the default Secure `__Host-weave` cookie. For form and CRUD
+mutations, the browser Origin must match the configured listener exactly. The
+default is `http://127.0.0.1:8080`.
 
 ## CLI and development loop
 
-The CLI creates a new Lake application using the selected local LeanWeave source
-checkout. It never overwrites an existing directory.
-
-```sh
-lake exe weave new ../my-app --path "$PWD"
-cd ../my-app
-/path/to/lean-weave/.lake/build/bin/weave build
-/path/to/lean-weave/.lake/build/bin/weave routes
-/path/to/lean-weave/.lake/build/bin/weave test
-/path/to/lean-weave/.lake/build/bin/weave dev
-```
-
-`WEAVE_PATH` can select the source checkout in place of `--path`. Generated
-applications include `App.lean`, a server entry point and an application test.
-Project commands accept an optional Lake executable target. In this repository:
+Follow the [scaffold guide](../docs/getting-started.md#scaffold-a-project-with-weave)
+for a separate Lake application. Project commands accept an optional Lake
+executable target. To list routes or develop an example in this repository:
 
 ```sh
 lake exe weave routes weave-crud
 lake exe weave dev weave-pages
 ```
 
-`dev` requires Python 3. It watches at most 10,000 Lean/configuration files,
-coalesces edits, allows one build at a time and gives builds a ten-minute limit.
-It restarts after a successful build, keeps the last good server on build errors,
-and allows five seconds for graceful child shutdown before forced termination.
-POSIX process groups and Windows console process groups receive their appropriate
-shutdown signals. The native application CI matrix targets Linux, macOS and Windows; the watcher
-rebuild/restart check was verified locally on macOS.
+`dev` watches at most 10,000 Lean and configuration files. It runs one build at
+a time with a ten-minute limit and allows five seconds for graceful child shutdown.
 
 ## Real network acceptance
 
+Use Python 3.10 or newer for the pinned HTTP/2 test libraries.
+
 ```sh
 python3 -m venv .lake/test-venv
-.lake/test-venv/bin/pip install -r scripts/requirements-test.txt
-.lake/test-venv/bin/python scripts/test_examples.py
-python3 scripts/test_tooling.py
+.lake/test-venv/bin/python -m pip install --require-hashes -r scripts/requirements-test.txt
+lake env .lake/test-venv/bin/python scripts/test_examples.py
+lake env .lake/test-venv/bin/python scripts/test_tooling.py
 ```
+
+On Windows use `.lake/test-venv/Scripts/python.exe`.
 
 The application checks boot all four native servers and run both real HTTP/1 and
 HTTP/2 requests. They exercise XSS escaping, routing and HEAD/OPTIONS, session

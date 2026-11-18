@@ -5,12 +5,15 @@ This package requires `pg_config`, libpq headers and libraries. It uses libpq's
 asynchronous connection and extended-query APIs on the reactor's owning thread;
 it creates no query tasks and performs no blocking DNS lookup.
 
+Install the [core prerequisites](../../docs/getting-started.md#prerequisites)
+first. Run these commands from the repository root.
+
 ```sh
 # Ubuntu: apt-get install libpq-dev
 # macOS: brew install libpq; export PATH="$(brew --prefix libpq)/bin:$PATH"
 # MSYS2 MINGW64: pacman -S mingw-w64-x86_64-postgresql
-lake build postgres-test postgres-example
-python3 test/wire_fixture.py
+lake -d adapters/postgres build postgres-test postgres-example
+(cd adapters/postgres && lake env python3 test/wire_fixture.py)
 ```
 
 On macOS the inherited lean-net build also needs Homebrew zlib and Brotli; set
@@ -20,15 +23,22 @@ on PATH. Windows uses `libpq.dll.a`; Linux/macOS use the native libpq shared lib
 
 ## Queries and worker lifecycle
 
+For an application using a local checkout, require `lean-weave-postgres` with
+`path = "../lean-weave/adapters/postgres"` in its `lakefile.toml`.
+
 ```lean
 import LeanWeavePostgres
 import LeanWeave.Core.Server
 open LeanWeave
 
-def example : IO Unit := do
+def main : IO Unit := do
   let database : Postgres.Config := {
-    hostAddr := "127.0.0.1", hostName := "db.example.com",
-    database := "app", user := "app", sslRootCert := "/etc/app/database-ca.pem" }
+    hostAddr := "127.0.0.1"
+    hostName := "db.example.com"
+    database := "app"
+    user := "app"
+    sslRootCert := "/etc/app/database-ca.pem"
+  }
   Server.serveManaged (fun _ run => do
     let pool ← Postgres.Pool.create database
     try
@@ -102,14 +112,14 @@ using a dedicated schema-owner role; application pools should use narrower DML r
 peer to test framing, parameter separation, pool saturation, cancellation, and
 timeout/result-limit recovery. It does not claim SQL-engine acceptance.
 
-Run the same native tests against a real server with
-`WEAVE_PG_USER=postgres WEAVE_PG_PASSWORD=... .lake/build/bin/postgres-test 5432`.
+Run the same native tests against a real server from the repository root with
+`WEAVE_PG_USER=postgres WEAVE_PG_PASSWORD=... lake -d adapters/postgres exe postgres-test 5432`.
 The test database must be disposable: tests create adapter tables and migrations.
 An isolated cluster helper starts and stops a temporary localhost-only PostgreSQL
 installation without enabling a persistent service:
 
 ```sh
-python3 test/live_cluster.py --pg-bin /path/to/postgresql/bin --tls --example
+(cd adapters/postgres && lake env python3 test/live_cluster.py --pg-bin /path/to/postgresql/bin --tls --example)
 ```
 
 The helper generates an ephemeral CA/server certificate, verifies TLS and rejects

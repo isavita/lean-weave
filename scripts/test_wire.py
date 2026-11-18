@@ -2,6 +2,7 @@
 """Live HTTP/1+HTTP/2 framework acceptance using lean-net's independent wire client."""
 import json
 import os
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import signal
 import socket
@@ -9,6 +10,7 @@ import struct
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 
@@ -109,6 +111,65 @@ class FrameworkWire(unittest.TestCase):
             self.assertEqual((conditional[0], conditional[2]), (304, b""))
             private = request(b"/cache?q=a", headers=[(b"cookie", b"session=private")])
             self.assertNotEqual(a[2], private[2])
+
+    def test_appm_can_return_a_stream_after_await_on_both_protocols(self):
+        for request in (self.h1, self.h2):
+            status, headers, body = request(b"/deferred-stream")
+            self.assertEqual((status, body), (200, b"deferred stream"))
+            self.assertEqual(int(headers[b"content-length"]), len(body))
+
+    def test_dynamic_vary_and_malformed_vary_on_both_protocols(self):
+        for label, request in ((b"h1", self.h1), (b"h2", self.h2)):
+            path = b"/cache-vary?protocol=" + label
+            desktop = request(path, headers=[(b"x-device", b"desktop")])
+            mobile = request(path, headers=[(b"x-device", b"mobile")])
+            desktop_hit = request(path, headers=[(b"x-device", b"desktop")])
+            self.assertEqual((desktop[0], mobile[0], desktop_hit[0]), (200, 200, 200))
+            self.assertEqual(desktop[1].get(b"vary"), b"X-Device")
+            self.assertEqual(desktop_hit[1].get(b"vary"), b"X-Device")
+            self.assertEqual(desktop[2], desktop_hit[2])
+            self.assertNotEqual(desktop[2], mobile[2])
+            self.assertIn(b"device=desktop", desktop[2])
+            self.assertIn(b"device=mobile", mobile[2])
+            absent = request(path)
+            empty = request(path, headers=[(b"x-device", b"")])
+            self.assertNotEqual(absent[2], empty[2])
+            self.assertEqual(absent[2], request(path)[2])
+            self.assertEqual(empty[2], request(path, headers=[(b"x-device", b"")])[2])
+            # Authorization and Cookie bypass both variants, even when Vary does not name them.
+            for name, value in ((b"authorization", b"Bearer example"), (b"cookie", b"sid=example")):
+                bypass = request(path, headers=[(b"x-device", b"desktop"), (name, value)])
+                self.assertNotEqual(bypass[2], desktop[2])
+            bad = b"/cache-malformed?protocol=" + label
+            first = request(bad)
+            second = request(bad)
+            self.assertEqual(first[1].get(b"vary"), b"X-Device,")
+            self.assertNotEqual(first[2], second[2])
+
+    def test_ten_misses_coalesce_on_h1_and_h2(self):
+        gate = threading.Barrier(10)
+        def h1_miss():
+            gate.wait(timeout=3)
+            return self.h1(b"/cache-coalesce?protocol=h1")
+        with ThreadPoolExecutor(max_workers=10) as pool:
+            h1_results = list(pool.map(lambda _: h1_miss(), range(10)))
+        self.assertEqual({result[0] for result in h1_results}, {200})
+        self.assertEqual({result[2] for result in h1_results}, {b"calls=1"})
+        client = H2Client(self.port)
+        streams = range(1, 20, 2)
+        try:
+            for stream in streams:
+                client.request(stream, b"/cache-coalesce?protocol=h2")
+            client.until(lambda: all(stream in client.ended for stream in streams) or
+                         bool(client.resets) or bool(client.goaways))
+            self.assertFalse(client.resets)
+            self.assertFalse(client.goaways)
+            self.assertEqual({dict(client.headers[stream][0].headers)[b":status"] for stream in streams}, {b"200"})
+            self.assertEqual({bytes(client.bodies[stream]) for stream in streams}, {b"calls=2"})
+            client.request(21, b"/cache-coalesce?protocol=h2")
+            self.assertEqual(client.response(21), b"calls=2")
+        finally:
+            client.close()
 
     def test_early_origin_check_before_body_on_both_protocols(self):
         with socket.create_connection(("127.0.0.1", self.port), timeout=3) as peer:

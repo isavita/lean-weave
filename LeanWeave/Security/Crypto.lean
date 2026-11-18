@@ -24,7 +24,7 @@ def sha256 (input : ByteArray) : ByteArray := Id.run do
   for i in [:8] do bytes := bytes.push ((bits / (256 ^ (7-i))) % 256).toUInt8
   let mut state : Array UInt32 := #[0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19]
   for block in [:bytes.size / 64] do
-    let mut words : Array UInt32 := #[]
+    let mut words : Array UInt32 := Array.emptyWithCapacity 64
     for i in [:16] do
       let offset := block * 64 + i * 4
       words := words.push ((bytes[offset]!.toUInt32 <<< 24) ||| (bytes[offset+1]!.toUInt32 <<< 16) |||

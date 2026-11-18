@@ -3,6 +3,11 @@
 Optional Redis adapter for LeanWeave. Import `LeanWeaveRedis`; declarations live
 in `LeanWeave.Redis`. The core package does not load or require this adapter.
 
+For an application using a local checkout, require `lean-weave-redis` with
+`path = "../lean-weave/adapters/redis"` in its `lakefile.toml`. The example below
+connects to Redis at its default `127.0.0.1:6379` endpoint and uses a separate key
+namespace for the app.
+
 For distributed channels, construct a `PubSub.Adapter` on its native owner and
 use `adapter.channel authorize`. The resulting `Realtime.Channel` uses the same
 typed `broadcast` API as a local channel, with WS/SSE subscriptions fed by Redis
@@ -32,7 +37,9 @@ def app (_worker : Nat) : IO Handler := do
   let redis ← Redis.Client.new { namespacePrefix := "myapp:production:" }
   let origin : Handler := fun _ =>
     pure ((Response.text "dashboard").withHeader "cache-control" "public, max-age=5")
-  return Redis.middleware redis {} origin
+  let policy : Cache.Policy := {
+    admit := some (fun ctx => pure (.cache ctx "public:dashboard")) }
+  return Redis.middleware redis policy origin
 
 def main : IO Unit :=
   Server.serve app { appRetainedBytes := 131072 }
@@ -59,8 +66,13 @@ cache helper methods convert them into AppError 503.
 
 `Redis.middleware client policy` caches explicitly public GET responses using
 the core host/tenant/route/path/query/locale/Vary key and strict eligibility
-checks. Authenticated/session/cookie traffic, private/no-store responses,
-Set-Cookie, Vary:* and unsupported Vary dimensions bypass storage. HEAD reuses
+checks. The `policy.admit` callback runs on every request, including hits; its
+verified scope enters the key. The default policy bypasses caching. Complete
+tenant resolution, authentication, authorization and feature checks before
+returning `.cache`; use a verified tenant scope for tenant routes.
+Authenticated/session/cookie traffic, private/no-store responses,
+Set-Cookie, Vary:* and Vary dimensions outside `policy.vary` bypass storage.
+The Redis adapter does not maintain a dynamic Vary variant index. HEAD reuses
 GET metadata without filling on a miss. ETags and If-None-Match reuse the core
 conditional response logic. Oversized fills bypass storage. `Redis.fragment`
 provides the same public request isolation for named component bytes.
@@ -77,7 +89,9 @@ application policy. `publish` checks the owner token, writes the value with TTL 
 lease in one atomic evaluation. `delete` invalidates both the value and any
 outstanding lease atomically. Consequently an expired, replaced or invalidated
 producer cannot repopulate the key through `publish`. The response/fragment
-middleware uses this protocol. Plain `set` is an unconditional low-level write
+middleware uses this protocol. For response invalidation, pass
+`Redis.responseKey checkedContext verifiedScope policy` to `client.delete`.
+Plain `set` is an unconditional low-level write
 and does not provide that fill guarantee. Cancellation closes command sockets;
 a fill lease remaining after cancellation expires within its bounded TTL.
 

@@ -32,7 +32,7 @@ path = "../adapters/tls"
 [[require]]
 name = "lean-net"
 git = "https://github.com/isavita/lean-net.git"
-rev = "05733390a34012b2a388fd35bf2eb704916c30be"
+rev = "b1bca92a38ec3fbba7e8edbd5cde2360045e1956"
 
 [[require]]
 name = "lean-weave-http"

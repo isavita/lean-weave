@@ -58,6 +58,13 @@ private def create (directory : String) (explicitPath : Option String) : IO UInt
 /-- The bounded portable watcher is bundled into the executable. -/
 private def devProgram : String := include_str "scripts" / "dev.py"
 
+/-- Hold the watcher stdin pipe open while waiting. The watcher observes EOF
+    and drains its children if the launcher exits or receives a targeted signal. -/
+private def dev (target : String) : IO UInt32 := do
+  let child ← IO.Process.spawn {
+    cmd := "python3", args := #["-c", devProgram, target, "--parent-pipe"], stdin := .piped }
+  child.wait
+
 /-- Command line entry point. Arguments are never interpolated into a shell. -/
 def run (args : List String) : IO UInt32 := do
   match args with
@@ -70,8 +77,8 @@ def run (args : List String) : IO UInt32 := do
   | ["test", target] => process "lake" #["exe", target]
   | ["routes"] => process "lake" #["exe", "app", "--routes"]
   | ["routes", target] => process "lake" #["exe", target, "--routes"]
-  | ["dev"] => process "python3" #["-c", devProgram, "app"]
-  | ["dev", target] => process "python3" #["-c", devProgram, target]
+  | ["dev"] => dev "app"
+  | ["dev", target] => dev target
   | _ => IO.eprint usage; return 2
 
 end LeanWeave.Tooling

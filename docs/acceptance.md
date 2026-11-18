@@ -1,20 +1,22 @@
 # Acceptance and reproducible measurements
 
-Run from the repository root with the documented native development libraries:
+Run from the repository root with the documented native development libraries
+and Python 3.10 or newer on `PATH`.
 
 ```sh
-lake build LeanWeave weave weave-test weave-pages weave-forms weave-crud weave-dashboard weave-wire-fixture weave-bench
+lake build LeanWeave weave weave-test weave-pages weave-forms weave-crud weave-dashboard weave-wire-fixture weave-static-fixture weave-bench
 lake exe weave-test
 python3 -m venv .lake/test-venv
 .lake/test-venv/bin/python -m pip install --require-hashes -r scripts/requirements-test.txt
 lake env .lake/test-venv/bin/python scripts/test_wire.py -v
 lake env .lake/test-venv/bin/python scripts/test_examples.py -v
+lake env .lake/test-venv/bin/python scripts/test_static.py -v
 lake env .lake/test-venv/bin/python scripts/test_tooling.py
-python3 scripts/benchmark.py --iterations 20000 --output benchmarks/results.json
+lake env .lake/test-venv/bin/python scripts/benchmark.py --iterations 20000 --output .lake/test-output/benchmark.json
 ```
 
 On Windows use `.lake/test-venv/Scripts/python.exe`. `lake env` supplies the native
-library search path. Python3.14 is used by CI and supports the pinned HTTP/2 test
+library search path. CI uses Python 3.14 and the pinned HTTP/2 test
 libraries. HTTP/2 clients use independent hpack/h2 implementations; these checks
 use real TCP, not browser emulation.
 
@@ -57,18 +59,34 @@ large ByteArray/native allocator traffic, total allocated bytes and process RSS.
 These counts must not be described as total allocations or memory consumption.
 
 Samples warm up literal initialization and measure compiled HTML, full
-path/query decode plus typed route/render, and fragment-cache hits. Each result
+path/query decode plus typed route/render, fragment-cache hits, direct response
+store hits with one or 1,024 seeded keys, and response middleware hits. Each result
 feeds a checksum so work remains observable. These are single-process core
 microbenchmarks, not production throughput, TLS, HTTP/2 network latency or a
 comparison against another framework. Run on controlled hardware and repeat
 samples for comparisons; CI uploads measurements without flaky timing thresholds.
+
+A paired Apple M2 sample used the median of three 50,000-iteration runs per
+version, with Lean 4.35.0 and the same workloads.
+
+| Sample | Before, ns/op | After, ns/op | Before, small allocations/op | After, small allocations/op |
+| --- | ---: | ---: | ---: | ---: |
+| Decode, route, and render | 3,433 | 2,870 | 95.89 | 68.56 |
+| Direct response lookup, one key | 318 | 41 | 15.00 | 2.00 |
+| Direct response lookup, 1,024 keys | 9,995 | 605 | 38.93 | 22.84 |
+| Prebuilt middleware action hit | 46,059 | 15,181 | 191.00 | 116.00 |
+
+The baseline was `319505b` with the populated-cache workload backported. The
+new `response_middleware_request` sample also constructs the middleware action
+on every iteration from an already decoded context. It measured 15,640 ns/op
+and 128 small allocations/op in the same comparison.
 
 ## Network microbenchmark
 
 Build `weave-pages` using the command above, then run the existing executable:
 
 ```sh
-lake env .lake/test-venv/bin/python scripts/benchmark_http.py --iterations 1000 --warmup 100 --output benchmarks/http-results.json
+lake env .lake/test-venv/bin/python scripts/benchmark_http.py --iterations 1000 --warmup 100 --output .lake/test-output/http-benchmark.json
 ```
 
 The script performs no build. It starts a one-worker pages application on an

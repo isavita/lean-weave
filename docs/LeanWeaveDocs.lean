@@ -28,5 +28,7 @@ generate checked values and API documentation; gRPC supports all four method sha
 `LeanWeave.Http.Client` adds bounded native outbound HTTP, OTLP and rotating Vault
 KV v2 values. `LeanWeavePlugins` provides a development native loader with generation
 leases. Applications only link native adapters when their packages are required.
-See the repository README and runnable `Examples` for complete applications.
+See the [getting started guide](https://github.com/isavita/lean-weave/blob/main/docs/getting-started.md)
+for a minimal Lake project and the [runnable examples](https://github.com/isavita/lean-weave/tree/main/Examples)
+for pages, forms, CRUD and caching.
 -/
