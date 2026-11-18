@@ -121,7 +121,10 @@ def negotiate (accept : Option String) : Option Representation :=
 
 /-- Add Vary: Accept on both outcomes, preserving explicitly supplied HTML bytes. -/
 def negotiated (ctx : Context) (html : Html) (json : Lean.Json) (status : Nat := 200) : Response :=
-  let response := match negotiate (ctx.header "accept") with
+  let fields := ctx.request.headers.filter (fun field => field.name.toLower == "accept")
+  let accept := if fields.isEmpty then none else some <|
+    String.intercalate ", " (fields.toList.map fun field => (String.fromUTF8? field.value).getD "")
+  let response := match negotiate accept with
     | some .html => toResponse html status
     | some .json => Response.json json status
     | none => Response.text "Not Acceptable" 406

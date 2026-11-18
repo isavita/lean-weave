@@ -364,19 +364,53 @@ def securityTests : IO Unit := do
   check (counts.requests == 1 && counts.errors == 1 && counts.cancelled == 0 && counts.active == 0) "metrics errors are completed requests"
   let preflightHead : LeanNet.HTTP1.RequestHead := { method := "POST", target := "/".toUTF8, headers := #[header "origin" "https://evil.test"] }
   check (!(Middleware.sameOrigin "https://example.test" (fun _ => true) false preflightHead).isOk) "cross origin early rejection"
+  let optionalOrigin := Middleware.sameOrigin "https://example.test" (allowMissing := true)
+  check ((optionalOrigin { preflightHead with headers := #[] }).isOk) "origin policy permits absent Origin when configured"
+  let opaqueOrigin : LeanNet.HTTP1.Header := { name := "Origin", value := ByteArray.mk #[255] }
+  check ((optionalOrigin { preflightHead with headers := #[opaqueOrigin] }).toOption.isNone)
+    "origin policy distinguishes invalid Origin from missing Origin"
   let proxyContext := { context with request := { context.request with headers := context.request.headers.push (header "x-forwarded-host" "evil.test") } }
   let echoHost : Handler := fun c => pure (Response.text c.host)
   let response ← ok (← (Middleware.trustedProxies (fun _ => false) echoHost proxyContext).run)
   check (String.fromUTF8! response.body == "example.test") "untrusted forwarded host ignored"
   let duplicateProxy := { proxyContext with request := { proxyContext.request with headers := proxyContext.request.headers.push (header "x-forwarded-host" "second.test") } }
   check ((← status (Middleware.trustedProxies (fun _ => true) next) duplicateProxy) == 400) "repeated proxy headers rejected"
+  let proxyScheme := Middleware.trustedProxies (fun _ => true) (fun c =>
+    pure (Response.text ((c.attribute "scheme").getD "")))
+  for secure in #[false, true] do
+    let transport : LeanNet.HTTP1.TransportInfo := { secure, peer := ByteArray.mk #[127, 0, 0, 1] }
+    let request := { context.request with transport := some transport }
+    let direct ← ok (← (proxyScheme { context with request }).run)
+    check (direct.body == (if secure then "https" else "http").toUTF8) "proxy scheme falls back to transport security"
+    let forwarded := if secure then "http" else "https"
+    let forwardedRequest := { request with headers := request.headers.push (header "x-forwarded-proto" forwarded) }
+    let proxied ← ok (← (proxyScheme { context with request := forwardedRequest }).run)
+    check (proxied.body == forwarded.toUTF8) "proxy scheme honors the explicit forwarded protocol"
   let resolved := pipeline #[Middleware.authenticate (fun _ => pure (some "first")), Middleware.authenticate (fun _ => pure (some "second"))] (fun c => pure (Response.text ((c.attribute "principal").getD "")))
   let principal ← ok (← (resolved context).run)
   check (String.fromUTF8! principal.body == "second") "later principal replaces prior identity"
   let corsContext := { context with request := { context.request with headers := context.request.headers.push (header "origin" "https://good.test") } }
   let varying : Handler := fun _ => pure { headers := #[header "vary" "Accept", header "vary" "X-Tenant"] }
-  let corsResponse ← ok (← (Middleware.cors { origins := #["https://good.test"] } varying corsContext).run)
+  let cors := Middleware.cors { origins := #["https://good.test"] }
+  let corsResponse ← ok (← (cors varying corsContext).run)
   check (corsResponse.getHeader "vary" == some "Accept, X-Tenant, Origin") "CORS preserves all Vary dimensions"
+  let withoutOrigin ← ok (← (cors varying context).run)
+  check (withoutOrigin.getHeader "vary" == some "Accept, X-Tenant, Origin" &&
+    (withoutOrigin.getHeader "access-control-allow-origin").isNone) "CORS varies responses without Origin"
+  let withExistingOrigin : Handler := fun _ => pure { headers := #[header "vary" "Accept, origin", header "Vary" "Origin, X-Tenant"] }
+  let deduplicated ← ok (← (cors withExistingOrigin corsContext).run)
+  check (deduplicated.getHeader "vary" == some "Accept, origin, X-Tenant") "CORS adds Origin only once"
+  let varyAll : Handler := fun _ => pure { headers := #[header "vary" "Accept", header "Vary" " * "] }
+  for ctx in #[context, corsContext] do
+    let wildcard ← ok (← (cors varyAll ctx).run)
+    check (wildcard.getHeader "vary" == some "*") "CORS preserves the standalone Vary wildcard"
+  let preflight := { corsContext with request := { corsContext.request with
+    method := "OPTIONS"
+    headers := corsContext.request.headers ++ #[header "access-control-request-method" "POST",
+      header "access-control-request-headers" "content-type"] } }
+  let preflightResponse ← ok (← (cors varying preflight).run)
+  check (preflightResponse.status == 204 && preflightResponse.getHeader "vary" ==
+    some "Access-Control-Request-Method, Access-Control-Request-Headers, Origin") "CORS varies preflight responses"
   let cache ← Cache.Store.new { maxEntries := 2, maxBytes := 256, maxEntryBytes := 128, maxInFlight := 1 }
   let _ ← cache.put "a" "one".toUTF8 10 100
   let _ ← cache.put "b" "two".toUTF8 10 100

@@ -41,6 +41,7 @@ private structure Row where
 private def joinPath (basePath path : String) : String :=
   if basePath.isEmpty || basePath == "/" then path
   else if path == "/" then basePath
+  else if basePath.endsWith "/" && path.startsWith "/" then basePath ++ (path.drop 1).toString
   else basePath ++ path
 
 private def mkRow (source : Syntax) (name : Name) (method path : String)
@@ -69,8 +70,9 @@ private partial def flatten (entries : Array (TSyntax `weave_route)) (basePath :
           ("DELETE", "/:id<nat>", "delete")] do
         let field := mkIdent (Name.mkSimple (if action == "replace" then "update" else action))
         let target ← `($controller.$field)
+        let actionPath := if suffix.isEmpty then path else joinPath path suffix
         rows := rows.push (← mkRow entry (name.getId ++ Name.mkSimple action) method
-          (path ++ suffix) hostRule target pipelines)
+          actionPath hostRule target pipelines)
     | `(weave_route| group $path:str { $children:weave_route,* }) =>
       rows := rows ++ (← flatten children.getElems (joinPath basePath path.getString) hostRule pipelines)
     | `(weave_route| group $path:str host $hostname:str { $children:weave_route,* }) =>

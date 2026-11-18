@@ -68,6 +68,14 @@ def htmlTests : IO Unit := do
   check (Html.negotiate (some "text/html;q=0.1, application/json;q=0.9") == some .json) "Accept quality"
   check (Html.negotiate (some "text/html;q=0, */*;q=1") == some .json) "specific exclusion beats wildcard"
   check (Html.negotiate (some "text/html;q=0, application/json;q=0") == none) "unacceptable types rejected"
+  let request : LeanNet.HTTP1.Request := {
+    method := "GET"
+    target := "/".toUTF8
+    body := ByteArray.empty
+    headers := #[⟨"Accept", "text/html;q=0.1".toUTF8⟩, ⟨"accept", "application/json;q=0.9".toUTF8⟩] }
+  let json := Html.negotiated { request } (Html.text "view") (Lean.Json.str "value")
+  check (json.getHeader "content-type" == some "application/json; charset=utf-8" &&
+    json.getHeader "vary" == some "Accept") "negotiation combines repeated Accept field lines"
   let asset : Html.Asset := { path := "/app.css", fingerprint := "a1234" }
   check ((← safeUrl "/app.css?v=a1234").value == (asset.url.toOption.map (·.value)).getD "")
     "versioned asset URL"
