@@ -21,6 +21,29 @@ private structure TypedNumbers where
   integer : Int
   deriving Lean.FromJson
 
+private def multipartBounds : IO Unit := do
+  let headers := "Content-Disposition: form-data; name=\"fíle;category=data\"; filename=\"report=final;2026.pdf\"\r\nContent-Type: application/octet-stream"
+  let payload := ByteArray.mk #[0, 13, 42, 255]
+  let wire := ("--upload\r\n" ++ headers ++ "\r\n\r\n").toUTF8 ++ payload ++
+    "\r\n--upload\r\nContent-Disposition: form-data; name=\"note\"\r\n\r\nhello\r\n--upload--\r\n".toUTF8
+  let limits : Body.Limits := { maxPartHeaderBytes := headers.utf8ByteSize, maxFileBytes := payload.size }
+  let .ok parts := Body.multipart wire "upload" limits
+    | throw (IO.userError "multipart rejected a valid quoted parameter or exact byte limit")
+  unless parts.size == 2 && parts[0]!.name == "fíle;category=data" &&
+      parts[0]!.filename == some "report=final;2026.pdf" && parts[0]!.bytes == payload &&
+      parts[1]!.name == "note" && parts[1]!.bytes == "hello".toUTF8 do
+    throw (IO.userError "multipart did not preserve quoted parameters and binary bytes")
+  let status := fun result : Except AppError (Array Body.Part) => match result with
+    | .error error => error.status
+    | .ok _ => 200
+  unless status (Body.multipart wire "upload" { limits with maxPartHeaderBytes := headers.utf8ByteSize - 1 }) == 413 do
+    throw (IO.userError "multipart accepted a header terminator beyond its byte limit")
+  unless status (Body.multipart wire "upload" { limits with maxFileBytes := payload.size - 1 }) == 413 do
+    throw (IO.userError "multipart accepted a file boundary beyond its byte limit")
+  unless status (Body.multipart "--upload\r\nContent-Disposition: form-data".toUTF8 "upload" limits) == 400 do
+    throw (IO.userError "multipart did not distinguish a truncated header within its byte budget")
+  IO.println "PASS bounded multipart: quoted parameters, binary bytes, exact header and file limits"
+
 def run : IO Unit := do
   -- These remain tiny source strings. They are never passed to Json.parse.
   for source in #["1e1000000000", "1e-1000000000", "0e1000000000", "-1E+1000000000",
@@ -74,5 +97,6 @@ def run : IO Unit := do
   check (decoded.natural == 100000000000000000000 && decoded.integer == -100000000000000000000) "typed Nat/Int scientific decoding preserved within limits"
   check (status "[[[0]]]" {maxDepth := 2} == 413 && status "[1,2,3]" {maxFields := 1} == 413) "existing depth/node limits preserved"
   IO.println "PASS bounded JSON numbers: preparse exponents/digits, lexical strings/grammar, configuration and typed decoding"
+  multipartBounds
 
 end LeanWeave.Test.BodyBounds

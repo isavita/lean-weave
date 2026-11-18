@@ -135,24 +135,54 @@ structure Part where
   bytes : ByteArray
   deriving Inhabited
 
-private def findBytes (bytes needle : ByteArray) (start : Nat) : Option Nat := Id.run do
-  for i in [start:bytes.size + 1] do
-    if i + needle.size <= bytes.size then
-      if (Array.range needle.size).all (fun n => bytes[i+n]! == needle[n]!) then return some i
+private def matchesPrefixAt (bytes needle : @& ByteArray) (offset : Nat) : Nat → Bool
+  | 0 => true
+  | i + 1 => bytes[offset + i]! == needle[i]! && matchesPrefixAt bytes needle offset i
+
+@[inline] private def matchesAt (bytes needle : ByteArray) (offset : Nat) : Bool :=
+  matchesPrefixAt bytes needle offset needle.size
+
+@[inline] private def pairAt (bytes : ByteArray) (offset : Nat) (first second : UInt8) : Bool :=
+  offset + 1 < bytes.size && bytes[offset]! == first && bytes[offset + 1]! == second
+
+private def findBytes (bytes needle : ByteArray) (start last : Nat) : Option Nat := Id.run do
+  if needle.size > bytes.size then return none
+  let last := min last (bytes.size - needle.size)
+  for offset in [start:last + 1] do
+    if matchesAt bytes needle offset then return some offset
   return none
 
-private def findBoundary (bytes marker : ByteArray) (start : Nat) : Option Nat := Id.run do
-  for i in [start:bytes.size + 1] do
-    if i + marker.size + 2 <= bytes.size then
-      if (Array.range marker.size).all (fun n => bytes[i+n]! == marker[n]!) then
-        let tail := bytes.extract (i + marker.size) (i + marker.size + 2)
-        if tail == "--".toUTF8 || tail == "\r\n".toUTF8 then return some i
+private def findBoundary (bytes marker : ByteArray) (start last : Nat) : Option Nat := Id.run do
+  if marker.size + 2 > bytes.size then return none
+  let last := min last (bytes.size - marker.size - 2)
+  for offset in [start:last + 1] do
+    if bytes[offset]! == 13 && matchesAt bytes marker offset then
+      let tail := offset + marker.size
+      if pairAt bytes tail 45 45 || pairAt bytes tail 13 10 then return some offset
   return none
 
 private def quoted (text : String) : Option String := do
   if !text.startsWith "\"" || !text.endsWith "\"" || text.utf8ByteSize < 2 then none else
     let value := ((text.drop 1).toString.dropEnd 1).toString
     if value.contains '"' || value.contains '\\' || value.contains '\r' || value.contains '\n' then none else some value
+
+private def dispositionFieldEnd (bytes : @& ByteArray) (offset : Nat) (inQuote : Bool) : Nat → Nat
+  | 0 => offset
+  | remaining + 1 =>
+    let byte := bytes[offset]!
+    if byte == 59 && !inQuote then offset
+    else dispositionFieldEnd bytes (offset + 1) (if byte == 34 then !inQuote else inQuote) remaining
+
+-- Header bytes were validated as UTF-8. ASCII delimiters always fall on character boundaries.
+private def dispositionFields (text : String) : Array String := Id.run do
+  let bytes := text.toUTF8
+  let mut fields := #[]
+  let mut start := 0
+  while start <= bytes.size do
+    let stop := dispositionFieldEnd bytes start false (bytes.size - start)
+    fields := fields.push (String.fromUTF8! (bytes.extract start stop))
+    start := stop + 1
+  return fields
 
 /-- Bounded multipart/form-data. Payloads stay bytes, including binary uploads.
     No upload is written to a filename supplied by a client. Nested multipart is rejected. -/
@@ -162,24 +192,30 @@ def multipart (bytes : ByteArray) (boundary : String) (limits : Limits := {}) : 
       !boundary.toUTF8.data.all (fun b => b >= 33 && b <= 126 && b != 34) then
     throw { status := 400, message := "invalid multipart boundary" }
   let marker := ("--" ++ boundary).toUTF8
-  if bytes.extract 0 marker.size != marker then throw { status := 400, message := "missing multipart boundary" }
+  if bytes.size < marker.size || !matchesAt bytes marker 0 then
+    throw { status := 400, message := "missing multipart boundary" }
+  let delimiter := "\r\n".toUTF8 ++ marker
+  let headerEnd := "\r\n\r\n".toUTF8
   let mut cursor := marker.size
   let mut parts := #[]
   let mut finished := false
   for _ in [:limits.maxParts + 1] do
     if !finished then
-      if bytes.extract cursor (cursor+2) == "--".toUTF8 then
+      if pairAt bytes cursor 45 45 then
         cursor := cursor + 2
-        if bytes.extract cursor bytes.size != ByteArray.empty && bytes.extract cursor bytes.size != "\r\n".toUTF8 then
+        if cursor != bytes.size && !(cursor + 2 == bytes.size && pairAt bytes cursor 13 10) then
           throw { status := 400, message := "multipart epilogue not supported" }
         finished := true
+        break
       else
         if parts.size >= limits.maxParts then throw { status := 413, message := "too many multipart parts" }
-        if bytes.extract cursor (cursor+2) != "\r\n".toUTF8 then throw { status := 400, message := "invalid multipart separator" }
+        if !pairAt bytes cursor 13 10 then throw { status := 400, message := "invalid multipart separator" }
         cursor := cursor + 2
-        let some headEnd := findBytes bytes "\r\n\r\n".toUTF8 cursor
-          | throw { status := 400, message := "incomplete multipart headers" }
-        if headEnd - cursor > limits.maxPartHeaderBytes then throw { status := 413, message := "multipart headers too large" }
+        let lastHeaderEnd := cursor + limits.maxPartHeaderBytes
+        let some headEnd := findBytes bytes headerEnd cursor lastHeaderEnd | do
+          if lastHeaderEnd + headerEnd.size <= bytes.size then
+            throw { status := 413, message := "multipart headers too large" }
+          throw { status := 400, message := "incomplete multipart headers" }
         let some head := String.fromUTF8? (bytes.extract cursor headEnd)
           | throw { status := 400, message := "invalid multipart headers" }
         let mut disposition : Option String := none
@@ -195,25 +231,29 @@ def multipart (bytes : ByteArray) (boundary : String) (limits : Limits := {}) : 
         if contentType.any (fun v => v.toLower.startsWith "multipart/") then
           throw { status := 415, message := "nested multipart is unsupported" }
         let some dispositionValue := disposition | throw { status := 400, message := "missing content disposition" }
-        let fields := dispositionValue.splitOn ";"
-        if fields.head!.trimAscii.toString != "form-data" then throw { status := 400, message := "expected form-data disposition" }
+        let fields := dispositionFields dispositionValue
+        if fields[0]!.trimAscii.toString != "form-data" then throw { status := 400, message := "expected form-data disposition" }
         let mut name : Option String := none
         let mut filename : Option String := none
-        for field in fields.tail! do
-          let pair := field.trimAscii.toString.splitOn "="
-          if pair.length != 2 then throw { status := 400, message := "invalid disposition parameter" }
-          let some value := quoted pair[1]! | throw { status := 400, message := "expected quoted disposition value" }
-          if pair[0]! == "name" && name.isNone then name := some value
-          else if pair[0]! == "filename" && filename.isNone then filename := some value
+        for i in [1:fields.size] do
+          let field := fields[i]!.trimAscii.toString
+          let some equals := field.find? '=' | throw { status := 400, message := "invalid disposition parameter" }
+          let key := (field.sliceTo equals).toString
+          let some value := quoted (field.sliceFrom equals.next!).toString
+            | throw { status := 400, message := "expected quoted disposition value" }
+          if key == "name" && name.isNone then name := some value
+          else if key == "filename" && filename.isNone then filename := some value
           else throw { status := 400, message := "duplicate or unsupported disposition parameter" }
         let some fieldName := name | throw { status := 400, message := "missing multipart field name" }
-        let bodyStart := headEnd + 4
-        let some bodyEnd := findBoundary bytes ("\r\n".toUTF8 ++ marker) bodyStart
-          | throw { status := 400, message := "unterminated multipart body" }
-        let payload := bytes.extract bodyStart bodyEnd
+        let bodyStart := headEnd + headerEnd.size
         let maxSize := if filename.isSome then limits.maxFileBytes else limits.maxFieldBytes
-        if payload.size > maxSize then throw { status := 413, message := "multipart part too large" }
         if fieldName.utf8ByteSize > limits.maxFieldBytes then throw { status := 413, message := "multipart name too large" }
+        let lastBodyEnd := bodyStart + maxSize
+        let some bodyEnd := findBoundary bytes delimiter bodyStart lastBodyEnd | do
+          if lastBodyEnd + delimiter.size + 2 <= bytes.size then
+            throw { status := 413, message := "multipart part too large" }
+          throw { status := 400, message := "unterminated multipart body" }
+        let payload := bytes.extract bodyStart bodyEnd
         parts := parts.push { name := fieldName, filename, contentType, bytes := payload }
         cursor := bodyEnd + 2 + marker.size
   if !finished then throw { status := 400, message := "missing final multipart boundary" }

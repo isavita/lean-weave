@@ -38,6 +38,18 @@ private def responseBytes (action : AppM Response) : IO Nat := do
 @[noinline] private def responseRequestBytes (handler : Handler) (context : Context) : IO Nat :=
   responseBytes (handler context)
 
+private def multipartUpload (byte : UInt8) : ByteArray :=
+  "--weave-upload\r\nContent-Disposition: form-data; name=\"file\"; filename=\"upload.bin\"\r\nContent-Type: application/octet-stream\r\n\r\n".toUTF8 ++
+    ByteArray.mk (Array.replicate (512 * 1024) byte) ++ "\r\n--weave-upload--\r\n".toUTF8
+
+@[noinline] private def multipartUploadBytes (body : ByteArray) : IO Nat := do
+  let parts ← match Body.multipart body "weave-upload" with
+    | .error error => throw (IO.userError error.message)
+    | .ok parts => pure parts
+  unless parts.size == 1 && parts[0]!.bytes.size == 512 * 1024 do
+    throw (IO.userError "multipart benchmark decoded the wrong payload size")
+  return parts[0]!.bytes.size
+
 def main (args : List String) : IO Unit := do
   let count := (args.head?.bind String.toNat?).getD 20000
   if count == 0 || count > 10000000 then throw (IO.userError "iterations must be 1..10000000")
@@ -109,3 +121,7 @@ def main (args : List String) : IO Unit := do
   sampleBenchmark "response_middleware_request" count fun _ => responseRequestBytes cachedHandler context
   if (← upstreamCalls.get) != 1 then
     throw (IO.userError "response middleware benchmark reached upstream on a cache hit")
+
+  let uploads := #[multipartUpload 165, multipartUpload 90]
+  sampleBenchmark "multipart_upload_512_kib" (min count 100) fun i =>
+    multipartUploadBytes uploads[i % uploads.size]!
