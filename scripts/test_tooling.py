@@ -42,14 +42,14 @@ def wait_for(predicate, message, seconds=30):
 
 @contextmanager
 def watching(app, environment, log_path):
-    with log_path.open("w") as log:
+    with log_path.open("w", encoding="utf-8") as log:
         watcher = subprocess.Popen([str(WEAVE), "dev"], cwd=app, env=environment,
                                    stdout=log, stderr=subprocess.STDOUT, start_new_session=os.name == "posix",
                                    creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0)
         try:
             yield watcher
         except BaseException:
-            print(log_path.read_text(errors="replace"), file=sys.stderr)
+            print(log_path.read_text(encoding="utf-8", errors="replace"), file=sys.stderr)
             raise
         finally:
             if os.name == "posix":
@@ -96,7 +96,7 @@ if test -f "$WEAVE_TEST_HOLD_BUILD"; then
     exec sleep 60
 fi
 exec "$WEAVE_TEST_REAL_LAKE" "$@"
-''')
+''', encoding="utf-8")
     fake_lake.chmod(0o755)
     hold = temporary / "hold-build"
     build_pid = temporary / "build-pid"
@@ -108,10 +108,10 @@ exec "$WEAVE_TEST_REAL_LAKE" "$@"
     with watching(app, environment, temporary / "build-watch.log") as watcher:
         wait_for(lambda: b"Hello, LeanWeave!" in response(port)[1], "build-stop fixture did not start")
         hold.touch()
-        with (app / "App.lean").open("a") as source:
+        with (app / "App.lean").open("a", encoding="utf-8") as source:
             source.write("\n-- Trigger a deliberately slow rebuild.\n")
-        wait_for(lambda: build_pid.is_file() and build_pid.read_text().strip(), "rebuild did not start")
-        pid = int(build_pid.read_text())
+        wait_for(lambda: build_pid.is_file() and build_pid.read_text(encoding="utf-8").strip(), "rebuild did not start")
+        pid = int(build_pid.read_text(encoding="utf-8"))
         assert b"Hello, LeanWeave!" in response(port)[1], "rebuild stopped the previous server"
         try:
             stop_launcher(watcher, app, port)
@@ -129,20 +129,20 @@ def main():
         temporary = Path(temporary)
         app = temporary / "app"
         subprocess.run([str(WEAVE), "new", str(app), "--path", str(ROOT)], check=True)
-        original = (app / "App.lean").read_text()
+        original = (app / "App.lean").read_text(encoding="utf-8")
         for command in ["build", "test", "routes"]:
             subprocess.run([str(WEAVE), command], cwd=app, check=True)
         # Existing directories are protected against scaffolder overwrites.
         assert subprocess.run([str(WEAVE), "new", str(app)], stdout=subprocess.DEVNULL,
                               stderr=subprocess.DEVNULL).returncode != 0
-        assert (app / "App.lean").read_text() == original
+        assert (app / "App.lean").read_text(encoding="utf-8") == original
         main_file = app / "Main.lean"
         serve = "Server.serve (fun _ => pure routes.handler) config"
-        main_source = main_file.read_text()
+        main_source = main_file.read_text(encoding="utf-8")
         assert serve in main_source
         main_file.write_text(main_source.replace(serve,
             'Server.serve (fun _ => pure routes.handler) { config with\n'
-            '      onShutdown := IO.FS.writeFile "test-shutdown" "drained" }'))
+            '      onShutdown := IO.FS.writeFile "test-shutdown" "drained" }'), encoding="utf-8")
         with socket.socket() as listener:
             listener.bind(("127.0.0.1", 0))
             port = listener.getsockname()[1]
@@ -151,12 +151,13 @@ def main():
         with watching(app, environment, log_path) as watcher:
             wait_for(lambda: b"Hello, LeanWeave!" in response(port)[1], "initial dev server did not start")
             changed = original.replace("Hello, LeanWeave!", "Rebuilt, LeanWeave!")
-            (app / "App.lean").write_text(changed)
+            (app / "App.lean").write_text(changed, encoding="utf-8")
             wait_for(lambda: b"Rebuilt, LeanWeave!" in response(port)[1], "successful build did not restart")
-            (app / "App.lean").write_text(changed + "\nthis is invalid Lean syntax\n")
-            wait_for(lambda: "build failed; application preserved" in log_path.read_text(), "failed build not observed")
+            (app / "App.lean").write_text(changed + "\nthis is invalid Lean syntax\n", encoding="utf-8")
+            wait_for(lambda: "build failed; application preserved" in log_path.read_text(encoding="utf-8", errors="replace"),
+                     "failed build not observed")
             assert b"Rebuilt, LeanWeave!" in response(port)[1], "failed build killed the last good server"
-            (app / "App.lean").write_text(original)
+            (app / "App.lean").write_text(original, encoding="utf-8")
             wait_for(lambda: b"Hello, LeanWeave!" in response(port)[1], "recovery build did not restart")
             stop_launcher(watcher, app, port)
         wait_for(lambda: response(port)[0] is None, "development child was not stopped", seconds=10)
