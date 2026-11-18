@@ -158,12 +158,12 @@ def main():
             assert b"Rebuilt, LeanWeave!" in response(port)[1], "failed build killed the last good server"
             (app / "App.lean").write_text(original)
             wait_for(lambda: b"Hello, LeanWeave!" in response(port)[1], "recovery build did not restart")
-            if os.name == "posix":
-                stop_launcher(watcher, app, port)
+            stop_launcher(watcher, app, port)
         wait_for(lambda: response(port)[0] is None, "development child was not stopped", seconds=10)
+        print("PASS PID-only launcher stop while serving")
         if os.name == "posix":
             stop_during_build(app, environment, port, temporary)
-            print("PASS PID-only launcher stop during serving and rebuilding")
+            print("PASS PID-only launcher stop while rebuilding")
         print("PASS weave new/build/test/routes/dev + rebuild failure preservation + graceful stop")
 
 
